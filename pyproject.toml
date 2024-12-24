@@ -1,0 +1,15 @@
+[project]
+name            = "latex-table-generator"
+description     = "Auto generator latex to table image"
+readme          = "README.md"
+requires-python = ">=3.10"
+dependencies    = []
+dynamic         = ["version"]
+
+[tool]
+    [tool.ruff]
+    target-version = "py310"
+    line-length    = 130
+    ignore         = ["E402", "F841", "F401", "E203"]
+    [tool.hatch.version]
+    path = "src/latex_table_generator/__init__.py"
