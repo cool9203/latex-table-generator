@@ -20,6 +20,7 @@ def merge_horizontal_cell(
     latex_table_str: str,
     rng: random.Random = None,
     count: int = 1,
+    content: str = None,
     **kwds,
 ) -> str:
     result = re.findall(_latex_table_begin_pattern, latex_table_str)
@@ -36,7 +37,7 @@ def merge_horizontal_cell(
 
     for i in nums[:count]:
         texts = rows[i].replace(r"\hline", "").strip().split("&")
-        texts_str = "".join(texts)
+        texts_str = "".join(texts) if not content else content
         rows[i] = rf"\hline \multicolumn{{{len(texts)}}}{{|c|}}{{{texts_str}}}"
 
     final_latex_table_str = r"\\".join(rows)
@@ -45,7 +46,9 @@ def merge_horizontal_cell(
 
 def merge_vertical_cell(
     latex_table_str: str,
-    rng=None,
+    rng: random.Random = None,
+    count: int = 1,
+    content: str = None,
     **kwds,
 ) -> str:
     result = re.findall(_latex_table_begin_pattern, latex_table_str)
@@ -93,7 +96,7 @@ def latex_table_to_image(
         # 編譯 LaTeX 文件為 PDF
         try:
             subprocess.run(
-                ["pdflatex", "-output-directory", str(temp_dir), str(tex_file)],
+                ["xelatex", "-output-directory", str(temp_dir), str(tex_file)],
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -122,6 +125,7 @@ def latex_table_to_image(
     except Exception:
         pass
     finally:
+        return
         # 清理臨時文件
         for file in temp_dir.iterdir():
             file.unlink()
@@ -136,24 +140,23 @@ if __name__ == "__main__":
     \hline 2 & 彎料 & \#4 & 80 & 80 & & 340 & 720 & 2433 & \\
     \hline 3 & 彎料 & \#4 & 65 & 80 & & 310 & 10 & 31 & \\
     \hline 4 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & 2922 & \\
-    \hline \multicolumn{10}{|c|}{aaaaaa} \\
     \hline
     \end{tabular}"""
 
-    latex_table_str = merge_horizontal_cell(latex_table_str, rng=rng)
+    latex_table_str = merge_horizontal_cell(latex_table_str, rng=rng, content="以下空白")
     print(latex_table_str)
 
     latex_expression = rf"""
     \documentclass{{article}}
 
-    \usepackage{{CJKutf8}}
+    \usepackage{{xeCJK}}
+    \setCJKmainfont[Path = ./,
+        Extension = .otf,]{{NotoSerifCJKtc-Black.otf}}
 
     \begin{{document}}
-    \begin{{CJK}}{{UTF8}}{{gbsn}}
 
     {latex_table_str}
 
-    \end{{CJK}}
     \end{{document}}"""
 
     latex_table_to_image(latex_expression, output_path="latex_formula.png")
