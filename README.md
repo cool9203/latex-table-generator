@@ -9,3 +9,7 @@ sudo apt install texlive-fonts-recommended dvipng cm-super
 # Reference https://tex.stackexchange.com/a/687551
 sudo apt install latex-cjk-all
 ```
+
+## Note
+
+Dockerfile 沒有實際 build 起來看是否可以正確使用
