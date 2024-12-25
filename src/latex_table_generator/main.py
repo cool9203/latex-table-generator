@@ -16,7 +16,7 @@ _latex_table_begin_pattern = r"\\begin{tabular}{.*}"
 _latex_table_end_pattern = r"\\end{tabular}"
 
 
-def merge_horizontal_cell(
+def merge_horizontal_cell_multicolumn(
     latex_table_str: str,
     rng: random.Random = None,
     count: int = 1,
@@ -39,6 +39,35 @@ def merge_horizontal_cell(
         texts = rows[i].replace(r"\hline", "").strip().split("&")
         texts_str = "".join(texts) if not content else content
         rows[i] = rf"\hline \multicolumn{{{len(texts)}}}{{|c|}}{{{texts_str}}}"
+
+    final_latex_table_str = r"\\".join(rows)
+    return f"{begin_str}\n{final_latex_table_str}\n{end_str}"
+
+
+def merge_horizontal_cell(
+    latex_table_str: str,
+    rng: random.Random = None,
+    count: int = 1,
+    content: str = None,
+    **kwds,
+) -> str:
+    result = re.findall(_latex_table_begin_pattern, latex_table_str)
+    if not result:
+        raise ValueError("Not latex table")
+    begin_str = result[0]
+    end_str = r"\end{tabular}"
+    process_latex_table_str = re.sub(_latex_table_begin_pattern, "", latex_table_str)
+    process_latex_table_str = re.sub(_latex_table_end_pattern, "", process_latex_table_str)
+
+    rows = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip()]
+    nums = [i for i in range(1, len(rows))]
+    rng.shuffle(nums)
+
+    for i in nums[:count]:
+        texts = rows[i].replace(r"\hline", "").strip().split("&")
+        texts_str = "".join(texts) if not content else content
+        texts_str = "&".join([texts_str for _ in range(len(texts))])
+        rows[i] = f"\hline {texts_str}"
 
     final_latex_table_str = r"\\".join(rows)
     return f"{begin_str}\n{final_latex_table_str}\n{end_str}"
@@ -153,6 +182,7 @@ if __name__ == "__main__":
 
     \begin{{document}}
 
+    \hspace{{-5cm}}
     {latex_table_str}
 
     \end{{document}}"""
