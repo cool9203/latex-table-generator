@@ -1,5 +1,7 @@
 # coding: utf-8
 
+import random
+import re
 import subprocess
 import traceback
 from pathlib import Path
@@ -9,6 +11,59 @@ from pdf2image import convert_from_path
 
 from latex_table_generator.base import crop_table_bbox
 from latex_table_generator.camelot_base import run_table_detect
+
+_latex_table_begin_pattern = r"\\begin{tabular}{.*}"
+_latex_table_end_pattern = r"\\end{tabular}"
+
+
+def merge_horizontal_cell(
+    latex_table_str: str,
+    rng: random.Random = None,
+    count: int = 1,
+    **kwds,
+) -> str:
+    result = re.findall(_latex_table_begin_pattern, latex_table_str)
+    if not result:
+        raise ValueError("Not latex table")
+    begin_str = result[0]
+    end_str = r"\end{tabular}"
+    process_latex_table_str = re.sub(_latex_table_begin_pattern, "", latex_table_str)
+    process_latex_table_str = re.sub(_latex_table_end_pattern, "", process_latex_table_str)
+
+    rows = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip()]
+    nums = [i for i in range(1, len(rows))]
+    rng.shuffle(nums)
+
+    for i in nums[:count]:
+        texts = rows[i].replace(r"\hline", "").strip().split("&")
+        texts_str = "".join(texts)
+        rows[i] = rf"\hline \multicolumn{{{len(texts)}}}{{|c|}}{{{texts_str}}}"
+
+    final_latex_table_str = r"\\".join(rows)
+    return f"{begin_str}\n{final_latex_table_str}\n{end_str}"
+
+
+def merge_vertical_cell(
+    latex_table_str: str,
+    rng=None,
+    **kwds,
+) -> str:
+    result = re.findall(_latex_table_begin_pattern, latex_table_str)
+    if not result:
+        raise ValueError("Not latex table")
+    begin_str = result[0]
+    end_str = r"\end{tabular}"
+    process_latex_table_str = re.sub(_latex_table_begin_pattern, "", latex_table_str)
+    process_latex_table_str = re.sub(_latex_table_end_pattern, "", process_latex_table_str)
+
+    rows = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip()]
+    for i in range(1, len(rows)):
+        if rows[i] == r"\hline":
+            continue
+        print(rows[i])
+
+    final_latex_table_str = r"\\".join(rows)
+    return f"{begin_str}\n{final_latex_table_str}\n{end_str}"
 
 
 def latex_table_to_image(
@@ -58,9 +113,10 @@ def latex_table_to_image(
             print("Convert pdf to image success")
             if isinstance(images, list) and images:
                 image = images[0]
+                image.save("origin.png")
                 tables = run_table_detect(image)
                 crop_table_images = crop_table_bbox(src=image, tables=tables, margin=10)
-                plt.imsave(str("output_path.png"), crop_table_images[0])
+                plt.imsave("output.png", crop_table_images[0])
         except Exception as e:
             traceback.print_exception(e)
     except Exception:
@@ -73,26 +129,31 @@ def latex_table_to_image(
 
 
 if __name__ == "__main__":
-    # 使用範例
-    # 定義 LaTeX 表達式
-    latex_expression = r"""
-    \documentclass{article}
-
-    \usepackage{CJKutf8}
-
-    \begin{document}
-    \begin{CJK}{UTF8}{gbsn}
-
-    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|}
+    rng = random.Random(42)
+    latex_table_str = r"""\begin{tabular}{|c|c|c|c|c|c|c|c|c|c|}
     \hline 編號 & 組編號 & 號數 & 長A & 型狀/長度B & 長C & 總長度 & 支數 & 重量 & 備註 \\
     \hline 1 & 彎料 & \#5 & & 450 & & 480 & 10 & 75 & \\
     \hline 2 & 彎料 & \#4 & 80 & 80 & & 340 & 720 & 2433 & \\
     \hline 3 & 彎料 & \#4 & 65 & 80 & & 310 & 10 & 31 & \\
     \hline 4 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & 2922 & \\
+    \hline \multicolumn{10}{|c|}{aaaaaa} \\
     \hline
-    \end{tabular}
+    \end{tabular}"""
 
-    \end{CJK}
-    \end{document}"""
+    latex_table_str = merge_horizontal_cell(latex_table_str, rng=rng)
+    print(latex_table_str)
+
+    latex_expression = rf"""
+    \documentclass{{article}}
+
+    \usepackage{{CJKutf8}}
+
+    \begin{{document}}
+    \begin{{CJK}}{{UTF8}}{{gbsn}}
+
+    {latex_table_str}
+
+    \end{{CJK}}
+    \end{{document}}"""
 
     latex_table_to_image(latex_expression, output_path="latex_formula.png")
