@@ -125,7 +125,6 @@ def latex_table_to_image(
     except Exception:
         pass
     finally:
-        return
         # 清理臨時文件
         for file in temp_dir.iterdir():
             file.unlink()
@@ -144,7 +143,6 @@ if __name__ == "__main__":
     \end{tabular}"""
 
     latex_table_str = merge_horizontal_cell(latex_table_str, rng=rng, content="以下空白")
-    print(latex_table_str)
 
     latex_expression = rf"""
     \documentclass{{article}}
