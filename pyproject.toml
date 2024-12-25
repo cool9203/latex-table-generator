@@ -3,7 +3,13 @@ name            = "latex-table-generator"
 description     = "Auto generator latex to table image"
 readme          = "README.md"
 requires-python = ">=3.10"
-dependencies    = []
+dependencies    = [
+    "camelot-py[base]>=0.9.0",
+    "img2table>=1.4.0",
+    "matplotlib>=3.10.0",
+    "pdf2image>=1.17.0",
+    "pillow>=11.0.0",
+]
 dynamic         = ["version"]
 
 [tool]
