@@ -80,24 +80,24 @@ def merge_horizontal_cell(
     process_latex_table_str = re.sub(_latex_table_begin_pattern, "", latex_table_str)
     process_latex_table_str = re.sub(_latex_table_end_pattern, "", process_latex_table_str)
 
-    rows_multicolumn = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip()]
-    rows_repeat = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip()]
-    rand_nums = [i for i in range(1, len(rows_multicolumn))]
+    rows_image = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip()]
+    rows_label = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip()]
+    rand_nums = [i for i in range(1, len(rows_image))]
     rng.shuffle(rand_nums)
     rand_nums = rand_nums[:count]
 
-    for rand_num in rand_nums:
-        texts = rows_multicolumn[rand_num].replace(r"\hline", "").strip().split("&")
-        texts_str = "".join(texts) if not content else content
+    for rand_num in rand_nums:  # 執行 count 次
+        texts = rows_image[rand_num].replace(r"\hline", "").strip().split("&")
+        texts_str = texts[rng.randint(0, len(texts) - 1)] if not content else content
         texts_str_repeat = "&".join([texts_str for _ in range(len(texts))])
-        rows_multicolumn[rand_num] = rf"\hline \multicolumn{{{len(texts)}}}{{|c|}}{{{texts_str}}}"
-        rows_repeat[rand_num] = f"\hline {texts_str_repeat}"
+        rows_image[rand_num] = rf"\hline \multicolumn{{{len(texts)}}}{{|c|}}{{{texts_str}}}"
+        rows_label[rand_num] = f"\hline {texts_str_repeat}"
 
-    latex_table_multicolumn_str = r"\\".join(rows_multicolumn)
-    latex_table_repeat_str = r"\\".join(rows_repeat)
+    latex_table_image_str = r"\\".join(rows_image)
+    latex_table_label_str = r"\\".join(rows_label)
     return (
-        f"{begin_str}\n{latex_table_multicolumn_str}\n{end_str}",
-        f"{begin_str}\n{latex_table_repeat_str}\n{end_str}",
+        f"{begin_str}\n{latex_table_image_str}\n{end_str}",
+        f"{begin_str}\n{latex_table_label_str}\n{end_str}",
     )
 
 
@@ -123,38 +123,36 @@ def merge_vertical_cell(
     end_str = r"\end{tabular}"
 
     table = convert_latex_table_to_pandas(latex_table_str, headers=True)
+    rows_image = [r"\hline " + " & ".join([str(c) for c in table.columns])]
+    rows_label = [r"\hline " + " & ".join([str(c) for c in table.columns])]
     rand_nums = [i for i in range(len(table) - 1)]
     rng.shuffle(rand_nums)
     rand_nums = rand_nums[:count]
     logger.debug(f"rand_nums: {rand_nums}")
 
-    rows_image = [
-        r"\hline " + " & ".join([str(c) for c in table.columns]),
-    ]
-    rows_label = [
-        r"\hline " + " & ".join([str(c) for c in table.columns]),
-    ]
-    for rand_num in rand_nums:
-        added_multirow = False
-        start_add_cline = False
-        col = rng.randint(0, len(table.columns) - 1)
-        logger.debug(f"col: {col}")
+    for rand_num in rand_nums:  # 執行 count 次
+        # 檢查 vertical
         if isinstance(vertical, int):
             multirow_num = vertical + 1
         elif isinstance(vertical, (tuple, list)) and len(vertical) >= 2:
             multirow_num = rng.randint(vertical[0], min(vertical[1], len(table) - rand_num)) + 1
         else:
-            raise TypeError(f"vertical should be int or tuple{vertical}")
+            raise TypeError(f"vertical should be int or tuple. But got '{vertical}'")
+
+        added_multirow = False  # 是否已經加過 multirow 的狀態
+        start_add_cline = False  # 是否要開始加 cline 的狀態
+        col = rng.randint(0, len(table.columns) - 1)
+        logger.debug(f"col: {col}")
 
         for i in range(len(table)):
             contents_image = list()
             contents_label = list()
-            _cell_content = content
+            _cell_content = content  # FIXME: 要可以隨機挑原本的內容
             if i in [rand_num + n for n in range(multirow_num)]:  # add multirow and cline
-                for j, v in enumerate(table.iloc[i]):
-                    if j == col:
+                for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
+                    if j == col:  # 若是是要 multirow 的欄位
                         contents_label.append(_cell_content)
-                        if not added_multirow:
+                        if not added_multirow:  # multirow 不會重複加, 所以只加第一次
                             contents_image.append(rf"\multirow{{{multirow_num}}}{{*}}{{{_cell_content}}}")
                             added_multirow = True
                         else:
@@ -163,10 +161,10 @@ def merge_vertical_cell(
                         contents_image.append(v)
                         contents_label.append(v)
 
-                if start_add_cline:
-                    if col == 0:
+                if start_add_cline:  # 增加 cline, range 為 [1, len(columns)]
+                    if col == 0:  # 邊界 0
                         contents_image[0] = rf"\cline{{{col+2}-{len(table.columns)}}} {contents_image[0]}"
-                    elif col == len(table.columns) - 1:
+                    elif col == len(table.columns) - 1:  # 邊界 len-1
                         contents_image[0] = rf"\cline{{1-{len(table.columns) - 1}}} {contents_image[0]}"
                     else:
                         contents_image[0] = rf"\cline{{1-{col}}} \cline{{{col+2}-{len(table.columns)}}} {contents_image[0]}"
