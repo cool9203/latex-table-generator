@@ -128,7 +128,10 @@ def merge_vertical_cell(
     rand_nums = rand_nums[:count]
     logger.debug(f"rand_nums: {rand_nums}")
 
-    rows = [
+    rows_image = [
+        r"\hline " + " & ".join([str(c) for c in table.columns]),
+    ]
+    rows_label = [
         r"\hline " + " & ".join([str(c) for c in table.columns]),
     ]
     for rand_num in rand_nums:
@@ -144,36 +147,45 @@ def merge_vertical_cell(
             raise TypeError(f"vertical should be int or tuple{vertical}")
 
         for i in range(len(table)):
-            contents = list()
+            contents_image = list()
+            contents_label = list()
+            _cell_content = content
             if i in [rand_num + n for n in range(multirow_num)]:  # add multirow and cline
                 for j, v in enumerate(table.iloc[i]):
                     if j == col:
+                        contents_label.append(_cell_content)
                         if not added_multirow:
-                            contents.append(rf"\multirow{{{multirow_num}}}{{*}}{{{content}}}")
+                            contents_image.append(rf"\multirow{{{multirow_num}}}{{*}}{{{_cell_content}}}")
                             added_multirow = True
                         else:
-                            contents.append("")
+                            contents_image.append("")
                     else:
-                        contents.append(v)
+                        contents_image.append(v)
+                        contents_label.append(v)
 
                 if start_add_cline:
                     if col == 0:
-                        contents[0] = rf"\cline{{{col+2}-{len(table.columns)}}} {contents[0]}"
+                        contents_image[0] = rf"\cline{{{col+2}-{len(table.columns)}}} {contents_image[0]}"
                     elif col == len(table.columns) - 1:
-                        contents[0] = rf"\cline{{1-{len(table.columns) - 1}}} {contents[0]}"
+                        contents_image[0] = rf"\cline{{1-{len(table.columns) - 1}}} {contents_image[0]}"
                     else:
-                        contents[0] = rf"\cline{{1-{col}}} \cline{{{col+2}-{len(table.columns)}}} {contents[0]}"
+                        contents_image[0] = rf"\cline{{1-{col}}} \cline{{{col+2}-{len(table.columns)}}} {contents_image[0]}"
                 start_add_cline = True
             else:
-                contents = [str(e) for e in table.iloc[i]]
-            contents = " & ".join(contents)
-            rows.append(rf"\hline {contents}" if r"\cline" not in contents else contents)
+                contents_image = [str(e) for e in table.iloc[i]]
+                contents_label = [str(e) for e in table.iloc[i]]
+            contents_image = " & ".join(contents_image)
+            contents_label = " & ".join(contents_label)
+            rows_image.append(rf"\hline {contents_image}" if r"\cline" not in contents_image else contents_image)
+            rows_label.append(rf"\hline {contents_label}" if r"\cline" not in contents_label else contents_label)
 
-    rows.append(r"\hline")
-    final_latex_table_str = r"\\".join(rows)
+    rows_image.append(r"\hline")
+    rows_label.append(r"\hline")
+    final_latex_table_image_str = r"\\".join(rows_image)
+    final_latex_table_label_str = r"\\".join(rows_label)
     return (
-        f"{begin_str}\n{final_latex_table_str}\n{end_str}",
-        f"{begin_str}\n{final_latex_table_str}\n{end_str}",
+        f"{begin_str}\n{final_latex_table_image_str}\n{end_str}",
+        f"{begin_str}\n{final_latex_table_label_str}\n{end_str}",
     )
 
 
@@ -245,6 +257,7 @@ if __name__ == "__main__":
 
     latex_table_image_str, latex_table_label_str = merge_vertical_cell(latex_table_str, rng=rng, content="以下空白")
     logger.debug(latex_table_image_str)
+    logger.debug(latex_table_label_str)
 
     Path("./outputs").mkdir(exist_ok=True)
 
