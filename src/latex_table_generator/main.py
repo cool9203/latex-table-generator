@@ -68,6 +68,7 @@ def merge_horizontal_cell(
     content: str = None,
     **kwds,
 ) -> Tuple[str, str]:
+    # TODO: 支援可以少數欄水平合併
     logger.debug("Run merge_horizontal_cell")
     result = re.findall(_latex_table_begin_pattern, latex_table_str)
     if not result:
@@ -88,7 +89,7 @@ def merge_horizontal_cell(
 
     for rand_num in rand_nums:  # 執行 count 次
         texts = rows_image[rand_num].replace(r"\hline", "").strip().split("&")
-        texts_str = texts[rng.randint(0, len(texts) - 1)] if not content else content
+        texts_str = content if content else texts[rng.randint(0, len(texts) - 1)]
         texts_str_repeat = "&".join([texts_str for _ in range(len(texts))])
         rows_image[rand_num] = rf"\hline \multicolumn{{{len(texts)}}}{{|c|}}{{{texts_str}}}"
         rows_label[rand_num] = f"\hline {texts_str_repeat}"
@@ -147,7 +148,8 @@ def merge_vertical_cell(
         for i in range(len(table)):
             contents_image = list()
             contents_label = list()
-            _cell_content = content  # FIXME: 要可以隨機挑原本的內容
+            _cell_contents = table[table.columns[col]].iloc[rand_num : rand_num + multirow_num].values
+            _cell_content = content if content else _cell_contents[rng.randint(0, len(_cell_contents) - 1)]
             if i in [rand_num + n for n in range(multirow_num)]:  # add multirow and cline
                 for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
                     if j == col:  # 若是是要 multirow 的欄位
