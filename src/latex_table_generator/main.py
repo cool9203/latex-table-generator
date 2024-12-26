@@ -49,7 +49,7 @@ def convert_latex_table_to_pandas(
     rows = [row.strip() for row in rows if "&" in row]  # 過濾掉無關的行
 
     # 拆分表格各儲存格
-    table_data = [row.replace("\\\\", "").replace(r"\hline", "").strip().split("&") for row in rows]
+    table_data = [row.replace(r"\\", "").replace(r"\hline", "").strip().split("&") for row in rows]
     cleaned_data = [[cell.strip() for cell in row] for row in table_data]
 
     if isinstance(headers, bool) and headers:
