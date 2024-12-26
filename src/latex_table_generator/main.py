@@ -1,9 +1,10 @@
 # coding: utf-8
 
+import logging
+import os
 import random
 import re
 import subprocess
-import traceback
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Sequence, Tuple, Union
@@ -32,6 +33,10 @@ _latex_template = r"""
     {latex_table_str}
 
     \end{{document}}"""
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler())
+logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 
 def convert_latex_table_to_pandas(
@@ -63,6 +68,7 @@ def merge_horizontal_cell(
     content: str = None,
     **kwds,
 ) -> Tuple[str, str]:
+    logger.debug("Run merge_horizontal_cell")
     result = re.findall(_latex_table_begin_pattern, latex_table_str)
     if not result:
         raise ValueError("Not latex table")
@@ -76,15 +82,16 @@ def merge_horizontal_cell(
 
     rows_multicolumn = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip()]
     rows_repeat = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip()]
-    nums = [i for i in range(1, len(rows_multicolumn))]
-    rng.shuffle(nums)
+    rand_nums = [i for i in range(1, len(rows_multicolumn))]
+    rng.shuffle(rand_nums)
+    rand_nums = rand_nums[:count]
 
-    for i in nums[:count]:
-        texts = rows_multicolumn[i].replace(r"\hline", "").strip().split("&")
+    for rand_num in rand_nums:
+        texts = rows_multicolumn[rand_num].replace(r"\hline", "").strip().split("&")
         texts_str = "".join(texts) if not content else content
         texts_str_repeat = "&".join([texts_str for _ in range(len(texts))])
-        rows_multicolumn[i] = rf"\hline \multicolumn{{{len(texts)}}}{{|c|}}{{{texts_str}}}"
-        rows_repeat[i] = f"\hline {texts_str_repeat}"
+        rows_multicolumn[rand_num] = rf"\hline \multicolumn{{{len(texts)}}}{{|c|}}{{{texts_str}}}"
+        rows_repeat[rand_num] = f"\hline {texts_str_repeat}"
 
     latex_table_multicolumn_str = r"\\".join(rows_multicolumn)
     latex_table_repeat_str = r"\\".join(rows_repeat)
@@ -102,6 +109,7 @@ def merge_vertical_cell(
     vertical: Tuple[int, Tuple[int, int]] = 1,
     **kwds,
 ) -> Tuple[str, str]:
+    logger.debug("Run merge_vertical_cell")
     if count != 1:
         raise NotImplementedError("Not support count > 1")
 
@@ -115,27 +123,51 @@ def merge_vertical_cell(
     end_str = r"\end{tabular}"
 
     table = convert_latex_table_to_pandas(latex_table_str, headers=True)
-    nums = [i for i in range(len(table) - 1)]
-    rng.shuffle(nums)
+    rand_nums = [i for i in range(len(table) - 1)]
+    rng.shuffle(rand_nums)
+    rand_nums = rand_nums[:count]
+    logger.debug(f"rand_nums: {rand_nums}")
 
     rows = [
         r"\hline " + " & ".join([str(c) for c in table.columns]),
     ]
-    for i in nums[:count]:
+    for rand_num in rand_nums:
+        added_multirow = False
+        start_add_cline = False
+        col = rng.randint(0, len(table.columns) - 1)
+        logger.debug(f"col: {col}")
         if isinstance(vertical, int):
-            multirow_num = vertical
+            multirow_num = vertical + 1
         elif isinstance(vertical, (tuple, list)) and len(vertical) >= 2:
-            multirow_num = rng.randint(vertical[0], min(vertical[1], len(table) - i))
+            multirow_num = rng.randint(vertical[0], min(vertical[1], len(table) - rand_num)) + 1
         else:
             raise TypeError(f"vertical should be int or tuple{vertical}")
 
-        for loc in range(len(table)):
-            if loc == i:
-                pass
+        for i in range(len(table)):
+            contents = list()
+            if i in [rand_num + n for n in range(multirow_num)]:  # add multirow and cline
+                for j, v in enumerate(table.iloc[i]):
+                    if j == col:
+                        if not added_multirow:
+                            contents.append(rf"\multirow{{{multirow_num}}}{{*}}{{{content}}}")
+                            added_multirow = True
+                        else:
+                            contents.append("")
+                    else:
+                        contents.append(v)
+
+                if start_add_cline:
+                    if col == 0:
+                        contents[0] = rf"\cline{{{col+2}-{len(table.columns)}}} {contents[0]}"
+                    elif col == len(table.columns) - 1:
+                        contents[0] = rf"\cline{{1-{len(table.columns) - 1}}} {contents[0]}"
+                    else:
+                        contents[0] = rf"\cline{{1-{col}}} \cline{{{col+2}-{len(table.columns)}}} {contents[0]}"
+                start_add_cline = True
             else:
-                contents = [str(e) for e in table.iloc[loc]]
-                contents = " & ".join(contents)
-                rows.append(rf"\hline {contents}")
+                contents = [str(e) for e in table.iloc[i]]
+            contents = " & ".join(contents)
+            rows.append(rf"\hline {contents}" if r"\cline" not in contents else contents)
 
     rows.append(r"\hline")
     final_latex_table_str = r"\\".join(rows)
@@ -174,10 +206,10 @@ def latex_table_to_image(
                     timeout=timeout,
                 )
             except subprocess.CalledProcessError as e:
-                print("Error in LaTeX compilation:", e.stderr.decode("utf-8"))
+                logger.error("Error in LaTeX compilation:", e.stderr.decode("utf-8"))
                 return
             except subprocess.TimeoutExpired as e:
-                print("ERROR: Convert latex table to pdf failed")
+                logger.error("ERROR: Convert latex table to pdf failed")
                 return
 
             try:
@@ -186,14 +218,14 @@ def latex_table_to_image(
                     return images[0]
 
             except Exception as e:
-                traceback.print_exception(e)
+                logger.exception(e)
         except Exception:
             pass
     return None
 
 
 if __name__ == "__main__":
-    rng = random.Random(42)
+    rng = random.Random(os.environ.get("SEED", None))
     latex_table_str = r"""\begin{tabular}{|c|c|c|c|c|c|c|c|c|c|}
     \hline 編號 & 組編號 & 號數 & 長A & 型狀/長度B & 長C & 總長度 & 支數 & 重量 & 備註 \\
     \hline 1 & 彎料 & \#5 & & 450 & & 480 & 10 & 75 & \\
@@ -212,6 +244,7 @@ if __name__ == "__main__":
 \end{tabular}"""
 
     latex_table_image_str, latex_table_label_str = merge_vertical_cell(latex_table_str, rng=rng, content="以下空白")
+    logger.debug(latex_table_image_str)
 
     Path("./outputs").mkdir(exist_ok=True)
 
