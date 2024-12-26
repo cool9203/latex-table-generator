@@ -4,14 +4,14 @@ import random
 import re
 import subprocess
 import traceback
-from os import PathLike
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Tuple
+from typing import Sequence, Tuple, Union
 
-from astropy.table import Table
+import pandas as pd
 from matplotlib import pyplot as plt
 from pdf2image import convert_from_path
+from PIL import Image as PILImage
 
 from latex_table_generator.base import crop_table_bbox
 from latex_table_generator.camelot_base import run_table_detect
@@ -21,6 +21,7 @@ _latex_table_end_pattern = r"\\end{tabular}"
 _latex_template = r"""
     \documentclass{{article}}
 
+    \usepackage{{multirow}}
     \usepackage{{xeCJK}}
     \setCJKmainfont[Path = ./,
         Extension = .otf,]{{NotoSerifCJKtc-Black.otf}}
@@ -31,6 +32,28 @@ _latex_template = r"""
     {latex_table_str}
 
     \end{{document}}"""
+
+
+def convert_latex_table_to_pandas(
+    latex_table_str: str,
+    headers: Union[bool, Sequence[str], None] = None,
+) -> pd.DataFrame:
+    process_latex_table_str = re.sub(_latex_table_begin_pattern, "", latex_table_str)
+    process_latex_table_str = re.sub(_latex_table_end_pattern, "", process_latex_table_str)
+    rows = process_latex_table_str.replace("\n", " ").strip().split(r"\\")
+    rows = [row.strip() for row in rows if "&" in row]  # 過濾掉無關的行
+
+    # 拆分表格各儲存格
+    table_data = [row.replace("\\\\", "").replace(r"\hline", "").strip().split("&") for row in rows]
+    cleaned_data = [[cell.strip() for cell in row] for row in table_data]
+
+    if isinstance(headers, bool) and headers:
+        headers = cleaned_data[0]  # 第一行是列名
+        data = cleaned_data[1:]  # 剩餘的是數據
+        df = pd.DataFrame(data, columns=headers)
+    elif headers:
+        df = pd.DataFrame(cleaned_data)
+    return df
 
 
 def merge_horizontal_cell(
@@ -76,9 +99,12 @@ def merge_vertical_cell(
     rng: random.Random = None,
     count: int = 1,
     content: str = None,
-    vertical: int = 1,
+    vertical: Tuple[int, Tuple[int, int]] = 1,
     **kwds,
 ) -> Tuple[str, str]:
+    if count != 1:
+        raise NotImplementedError("Not support count > 1")
+
     result = re.findall(_latex_table_begin_pattern, latex_table_str)
     if not result:
         raise ValueError("Not latex table")
@@ -87,25 +113,31 @@ def merge_vertical_cell(
 
     begin_str = result[0]
     end_str = r"\end{tabular}"
-    process_latex_table_str = re.sub(_latex_table_begin_pattern, "", latex_table_str)
-    process_latex_table_str = re.sub(_latex_table_end_pattern, "", process_latex_table_str)
 
-    with TemporaryDirectory(prefix="merge_vertical_cell") as temp_dir:
-        _temp_file_path = Path(temp_dir, "temp.tex")
-        with _temp_file_path.open("w", encoding="utf-8") as f:
-            f.write(latex_table_str)
-        table = Table.read(str(_temp_file_path), format="latex").to_pandas()
-    rows = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip()]
-
-    nums = [i for i in range(1, len(rows))]
+    table = convert_latex_table_to_pandas(latex_table_str, headers=True)
+    nums = [i for i in range(len(table) - 1)]
     rng.shuffle(nums)
 
+    rows = [
+        r"\hline " + " & ".join([str(c) for c in table.columns]),
+    ]
     for i in nums[:count]:
-        texts = rows[i].replace(r"\hline", "").strip().split("&")
-        texts_str = "".join(texts) if not content else content
-        texts_str = "&".join([texts_str for _ in range(len(texts))])
-        rows[i] = f"\hline {texts_str}"
+        if isinstance(vertical, int):
+            multirow_num = vertical
+        elif isinstance(vertical, (tuple, list)) and len(vertical) >= 2:
+            multirow_num = rng.randint(vertical[0], min(vertical[1], len(table) - i))
+        else:
+            raise TypeError(f"vertical should be int or tuple{vertical}")
 
+        for loc in range(len(table)):
+            if loc == i:
+                pass
+            else:
+                contents = [str(e) for e in table.iloc[loc]]
+                contents = " & ".join(contents)
+                rows.append(rf"\hline {contents}")
+
+    rows.append(r"\hline")
     final_latex_table_str = r"\\".join(rows)
     return (
         f"{begin_str}\n{final_latex_table_str}\n{end_str}",
@@ -115,17 +147,9 @@ def merge_vertical_cell(
 
 def latex_table_to_image(
     latex_table_str: str,
-    output_path: PathLike = "output.png",
-    pdf_image_path: PathLike = "origin.png",
     dpi: int = 300,
     timeout: int = 10,
-):
-    """
-    將 LaTeX 公式轉換為 PNG 圖片
-    :param latex_code: LaTeX 表達式 (例如：r"$E=mc^2$")
-    :param output_path: 輸出的圖片路徑 (預設為 output.png)
-    :param dpi: 圖片解析度 (預設為 300 DPI)
-    """
+) -> PILImage.Image:
     with TemporaryDirectory(prefix="latex_temp") as temp_dir:
         # 定義文件路徑
         tex_file = Path(temp_dir, "formula.tex")
@@ -149,7 +173,6 @@ def latex_table_to_image(
                     stderr=subprocess.PIPE,
                     timeout=timeout,
                 )
-                print("Convert latex table to pdf success")
             except subprocess.CalledProcessError as e:
                 print("Error in LaTeX compilation:", e.stderr.decode("utf-8"))
                 return
@@ -159,18 +182,14 @@ def latex_table_to_image(
 
             try:
                 images = convert_from_path(pdf_file, dpi=dpi, fmt="png")
-                print("Convert pdf to image success")
                 if isinstance(images, list) and images:
-                    image = images[0]
-                    if pdf_image_path:
-                        image.save(str(pdf_image_path))
-                    tables = run_table_detect(image)
-                    crop_table_images = crop_table_bbox(src=image, tables=tables, margin=10)
-                    plt.imsave(str(output_path), crop_table_images[0])
+                    return images[0]
+
             except Exception as e:
                 traceback.print_exception(e)
         except Exception:
             pass
+    return None
 
 
 if __name__ == "__main__":
@@ -184,12 +203,34 @@ if __name__ == "__main__":
     \hline
     \end{tabular}"""
 
-    latex_table_image_str, latex_table_label_str = merge_horizontal_cell(latex_table_str, rng=rng, content="以下空白")
+    latex_table_str_ = r"""\begin{tabular}{|c|c|c|}
+\hline
+\multirow{3}{*}{合併的儲存格} & \multicolumn{2}{|c|}{跨兩列的儲存格} \\
+\cline{2-3} & 第一列 & 第二列 \\
+\cline{2-3} & 第一列a & 第二列b \\
+\hline
+\end{tabular}"""
 
-    latex_table_to_image(
+    latex_table_image_str, latex_table_label_str = merge_vertical_cell(latex_table_str, rng=rng, content="以下空白")
+
+    Path("./outputs").mkdir(exist_ok=True)
+
+    image = latex_table_to_image(
         latex_table_image_str,
     )
-    latex_table_to_image(
+    if image:
+        image.save("outputs/origin-output.png")
+        tables = run_table_detect(image)
+        crop_table_images = crop_table_bbox(src=image, tables=tables, margin=10)
+        if crop_table_images:
+            plt.imsave("outputs/output.png", crop_table_images[0])
+
+    image = latex_table_to_image(
         latex_table_label_str,
-        output_path="label.png",
     )
+    if image:
+        image.save("outputs/origin-label.png")
+        tables = run_table_detect(image)
+        crop_table_images = crop_table_bbox(src=image, tables=tables, margin=10)
+        if crop_table_images:
+            plt.imsave("outputs/label.png", crop_table_images[0])
