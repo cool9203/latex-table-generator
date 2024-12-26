@@ -94,8 +94,8 @@ def merge_horizontal_cell(
         rows_image[rand_num] = rf"\hline \multicolumn{{{len(texts)}}}{{|c|}}{{{texts_str}}}"
         rows_label[rand_num] = f"\hline {texts_str_repeat}"
 
-    latex_table_image_str = r"\\".join(rows_image)
-    latex_table_label_str = r"\\".join(rows_label)
+    latex_table_image_str = "\\\\\n".join(rows_image)
+    latex_table_label_str = "\\\\\n".join(rows_label)
     return (
         f"{begin_str}\n{latex_table_image_str}\n{end_str}",
         f"{begin_str}\n{latex_table_label_str}\n{end_str}",
@@ -153,7 +153,7 @@ def merge_vertical_cell(
             if i in [rand_num + n for n in range(multirow_num)]:  # add multirow and cline
                 for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
                     if j == col:  # 若是是要 multirow 的欄位
-                        contents_label.append(_cell_content)
+                        contents_label.append(f"**{multirow_num} {_cell_content}")
                         if not added_multirow:  # multirow 不會重複加, 所以只加第一次
                             contents_image.append(rf"\multirow{{{multirow_num}}}{{*}}{{{_cell_content}}}")
                             added_multirow = True
@@ -181,8 +181,8 @@ def merge_vertical_cell(
 
     rows_image.append(r"\hline")
     rows_label.append(r"\hline")
-    final_latex_table_image_str = r"\\".join(rows_image)
-    final_latex_table_label_str = r"\\".join(rows_label)
+    final_latex_table_image_str = " \\\\\n".join(rows_image)
+    final_latex_table_label_str = " \\\\\n".join(rows_label)
     return (
         f"{begin_str}\n{final_latex_table_image_str}\n{end_str}",
         f"{begin_str}\n{final_latex_table_label_str}\n{end_str}",
