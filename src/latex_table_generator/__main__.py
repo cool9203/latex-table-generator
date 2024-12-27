@@ -54,11 +54,11 @@ def main(
 ):
     from matplotlib import pyplot as plt
 
-    from latex_table_generator.base import draw_table_bbox, get_image, paste_image_with_table_bbox
+    from latex_table_generator.base import draw_table_bbox, paste_image_with_table_bbox
     from latex_table_generator.main import (
         PILImage,
         convert_latex_table_to_pandas,
-        latex_table_to_image,
+        get_fit_size_latex_table_to_image,
         merge_horizontal_cell,
         merge_vertical_cell,
         run_table_detect,
@@ -123,15 +123,15 @@ def main(
             Path(output_path).mkdir(exist_ok=True, parents=True)
             tables = run_table_detect(file_image)
             if tables:
-                image = latex_table_to_image(
-                    latex_table_image_str.replace(r"\#", "#"),
-                    width=tables[0].bbox.x2 - tables[0].bbox.x1,
+                image = get_fit_size_latex_table_to_image(
+                    latex_table_str=latex_table_image_str,
+                    file_image=file_image,
+                    table=tables[0],
                 )
                 _ = convert_latex_table_to_pandas(
                     latex_table_str=latex_table_label_str,
                     headers=True,
                 )
-                image = get_image(src=image)  # Convert to MatLike
                 final_image = draw_table_bbox(src=file_image, tables=tables, margin=5)
                 final_image = paste_image_with_table_bbox(src=final_image, dst=image, table=tables[0], margin=10)
                 plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)

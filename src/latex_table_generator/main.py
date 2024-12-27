@@ -9,31 +9,37 @@ from tempfile import TemporaryDirectory
 from typing import Sequence, Tuple, Union
 
 import imgkit
+import numpy as np
 import pandas as pd
+import pypandoc
 from matplotlib import pyplot as plt
 from PIL import Image as PILImage
 
-from latex_table_generator.base import crop_table_bbox
-from latex_table_generator.camelot_base import run_table_detect
+from latex_table_generator.base import MatLike, crop_table_bbox, get_image
+from latex_table_generator.camelot_base import ExtractedTable, run_table_detect
 
 _latex_table_begin_pattern = r"\\begin{tabular}{.*}"
 _latex_table_end_pattern = r"\\end{tabular}"
 _default_css = r"""<style>
-    table {
+    table,
+    th,
+    td {{
+        border: 1px solid black;
         border-collapse: collapse;
+        font-size: 48px;
+        font-weight: normal;
+    }}
+
+    table {{
         width: 100%;
-    }
+    }}
 
-    th {
-        height: 2rem;
-    }
-
-    td {
-        padding-top: 1rem;
-        padding-bottom: 1rem;
-        padding-left: 1rem;
-        padding-right: 1rem;
-    }
+    td {{
+        padding-top: {padding}rem;
+        padding-bottom: {padding}rem;
+        padding-left: {padding}rem;
+        padding-right: {padding}rem;
+    }}
 </style>"""
 
 logger = logging.getLogger(__name__)
@@ -229,21 +235,12 @@ def latex_table_to_image(
     format: str = "jpeg",
     quality: Union[str, int] = "100",
     width: Union[str, int] = 2048,
+    **kwds,
 ) -> PILImage.Image:
-    table = convert_latex_table_to_pandas(
-        latex_table_str=latex_table_str,
-        headers=True,
-    )
-
     with TemporaryDirectory(prefix="latex_temp") as temp_dir:
         try:
             imgkit.from_string(
-                css
-                + "\n"
-                + table.to_html(
-                    index=False,
-                    justify="center",
-                ),
+                css.format(**kwds) + "\n" + pypandoc.convert_text(latex_table_str, "html", format="latex"),
                 str(Path(temp_dir, "temp.jpg")),
                 options={
                     "format": format,
@@ -258,6 +255,47 @@ def latex_table_to_image(
             logger.exception(e)
             logger.error("ERROR: latex_table_to_image")
     return None
+
+
+def get_fit_size_latex_table_to_image(
+    latex_table_str: str,
+    file_image: PILImage.Image,
+    table: ExtractedTable,
+    css: str = _default_css,
+    format: str = "jpeg",
+    quality: Union[str, int] = "100",
+    max_paddings: float = 3.0,
+    step: float = -0.2,
+) -> PILImage.Image:
+    file_image: MatLike = get_image(src=file_image)
+
+    image = get_image(
+        src=latex_table_to_image(
+            latex_table_str,
+            width=int(table.bbox.x2 - table.bbox.x1),
+            css=css,
+            format=format,
+            quality=quality,
+            padding=max_paddings,
+        )
+    )
+
+    for padding in np.arange(max_paddings, 1.0, step if step < 0 else (-1) * step):
+        # Check image board size
+        if (table.bbox.y1 + image.shape[0]) <= table.bbox.y2 and (table.bbox.x1 + image.shape[1]) <= table.bbox.x2:
+            break
+
+        image = get_image(
+            src=latex_table_to_image(
+                latex_table_str,
+                width=int(table.bbox.x2 - table.bbox.x1),
+                css=css,
+                format=format,
+                quality=quality,
+                padding=padding,
+            )
+        )
+    return image
 
 
 if __name__ == "__main__":
