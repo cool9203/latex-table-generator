@@ -126,7 +126,7 @@ def merge_vertical_cell(
     rng: random.Random = None,
     count: int = 1,
     content: str = None,
-    vertical: Tuple[int, Tuple[int, int]] = 1,
+    vertical: Union[int, Tuple[int, int]] = 1,
     specific_headers: Sequence[str] = None,
     **kwds,
 ) -> Tuple[str, str]:
