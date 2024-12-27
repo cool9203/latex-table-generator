@@ -4,14 +4,13 @@ import logging
 import os
 import random
 import re
-import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Sequence, Tuple, Union
 
+import imgkit
 import pandas as pd
 from matplotlib import pyplot as plt
-from pdf2image import convert_from_path
 from PIL import Image as PILImage
 
 from latex_table_generator.base import crop_table_bbox
@@ -19,20 +18,23 @@ from latex_table_generator.camelot_base import run_table_detect
 
 _latex_table_begin_pattern = r"\\begin{tabular}{.*}"
 _latex_table_end_pattern = r"\\end{tabular}"
-_latex_template = r"""
-    \documentclass{{article}}
+_default_css = r"""<style>
+    table {
+        border-collapse: collapse;
+        width: 100%;
+    }
 
-    \usepackage{{multirow}}
-    \usepackage{{xeCJK}}
-    \setCJKmainfont[Path = ./,
-        Extension = .otf,]{{NotoSerifCJKtc-Black.otf}}
+    th {
+        height: 2rem;
+    }
 
-    \begin{{document}}
-
-    \hspace{{-5cm}}
-    {latex_table_str}
-
-    \end{{document}}"""
+    td {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+</style>"""
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
@@ -223,48 +225,38 @@ def merge_vertical_cell(
 
 def latex_table_to_image(
     latex_table_str: str,
-    dpi: int = 300,
-    timeout: int = 10,
+    css: str = _default_css,
+    format: str = "jpeg",
+    quality: Union[str, int] = "100",
+    width: Union[str, int] = 2048,
 ) -> PILImage.Image:
+    table = convert_latex_table_to_pandas(
+        latex_table_str=latex_table_str,
+        headers=True,
+    )
+
     with TemporaryDirectory(prefix="latex_temp") as temp_dir:
-        # 定義文件路徑
-        tex_file = Path(temp_dir, "formula.tex")
-        pdf_file = Path(temp_dir, "formula.pdf")
-
-        # 寫入 LaTeX 文件
-        tex_file.write_text(
-            _latex_template.format(
-                latex_table_str=latex_table_str,
-            ),
-            encoding="utf-8",
-        )
-
         try:
-            # 編譯 LaTeX 文件為 PDF
-            try:
-                subprocess.run(
-                    ["xelatex", "-output-directory", str(temp_dir), str(tex_file)],
-                    check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=timeout,
-                )
-            except subprocess.CalledProcessError as e:
-                logger.error("Error in LaTeX compilation:", e.stderr.decode("utf-8"))
-                return
-            except subprocess.TimeoutExpired as e:
-                logger.error("ERROR: Convert latex table to pdf failed")
-                return
-
-            try:
-                images = convert_from_path(pdf_file, dpi=dpi, fmt="png")
-                if isinstance(images, list) and images:
-                    return images[0]
-
-            except Exception as e:
-                logger.exception(e)
-        except Exception:
-            pass
+            imgkit.from_string(
+                css
+                + "\n"
+                + table.to_html(
+                    index=False,
+                    justify="center",
+                ),
+                str(Path(temp_dir, "temp.jpg")),
+                options={
+                    "format": format,
+                    "quality": str(quality),
+                    "width": str(width),
+                    "quiet": "",
+                },
+            )
+            image = PILImage.open(Path(temp_dir, "temp.jpg"))
+            return image
+        except Exception as e:
+            logger.exception(e)
+            logger.error("ERROR: latex_table_to_image")
     return None
 
 

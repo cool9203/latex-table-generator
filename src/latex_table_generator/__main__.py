@@ -54,9 +54,10 @@ def main(
 ):
     from matplotlib import pyplot as plt
 
-    from latex_table_generator.base import crop_table_bbox, draw_table_bbox, paste_image_with_table_bbox
+    from latex_table_generator.base import draw_table_bbox, get_image, paste_image_with_table_bbox
     from latex_table_generator.main import (
         PILImage,
+        convert_latex_table_to_pandas,
         latex_table_to_image,
         merge_horizontal_cell,
         merge_vertical_cell,
@@ -120,28 +121,24 @@ def main(
             logger.debug(latex_table_image_str)
 
             Path(output_path).mkdir(exist_ok=True, parents=True)
-
-            image = latex_table_to_image(
-                latex_table_image_str,
-            )
-            label = latex_table_to_image(
-                latex_table_label_str,
-            )
-
-            if image and label:
-                tables = run_table_detect(file_image)
-                image_tables = run_table_detect(image)
-                crop_table_images = crop_table_bbox(src=image, tables=image_tables, margin=10)
-                if tables and crop_table_images:
-                    final_image = draw_table_bbox(src=file_image, tables=tables, margin=5)
-                    final_image = paste_image_with_table_bbox(
-                        src=final_image, dst=crop_table_images[0], table=tables[0], margin=10
-                    )
-                    plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
-                    with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
-                        f.write(latex_table_label_str)
-                else:
-                    logger.info(f"Not detect table, so skip {filename.name}")
+            tables = run_table_detect(file_image)
+            if tables:
+                image = latex_table_to_image(
+                    latex_table_image_str.replace(r"\#", "#"),
+                    width=tables[0].bbox.x2 - tables[0].bbox.x1,
+                )
+                _ = convert_latex_table_to_pandas(
+                    latex_table_str=latex_table_label_str,
+                    headers=True,
+                )
+                image = get_image(src=image)  # Convert to MatLike
+                final_image = draw_table_bbox(src=file_image, tables=tables, margin=5)
+                final_image = paste_image_with_table_bbox(src=final_image, dst=image, table=tables[0], margin=10)
+                plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
+                with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                    f.write(latex_table_label_str)
+            else:
+                logger.info(f"Not detect table, so skip {filename.name}")
         except Exception as e:
             logger.exception(e)
             logger.error(f"{filename.name} have error")
