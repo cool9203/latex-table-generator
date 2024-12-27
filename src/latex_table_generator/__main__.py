@@ -47,7 +47,7 @@ def main(
     merge_method: str = "random",
     h_contents: List[str] = ["開口補強"],
     v_contents: List[str] = ["彎鉤", "鋼材筋"],
-    specific_headers: List[str] = [".*備註.*", ".*圖[例示].*"],
+    specific_headers: List[str] = [".*備註.*"],
     **kwds,
 ):
     from matplotlib import pyplot as plt
@@ -114,7 +114,6 @@ def main(
                 raise ValueError("merge_method should choice from ['random', 'vertical', 'horizontal']")
 
             logger.debug(latex_table_image_str)
-            logger.debug(latex_table_label_str)
 
             Path(output_path).mkdir(exist_ok=True, parents=True)
 
