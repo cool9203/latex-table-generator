@@ -39,14 +39,32 @@ logger.addHandler(logging.StreamHandler())
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 
+def preprocess_latex_table_string(
+    latex_table_str: str,
+) -> str:
+    processed_latex_table_str = re.sub(_latex_table_begin_pattern, "", latex_table_str)
+    processed_latex_table_str = re.sub(_latex_table_end_pattern, "", processed_latex_table_str)
+    processed_latex_table_str = processed_latex_table_str.replace("\n", " ").strip()
+
+    # Filter multi \hline error
+    rows = processed_latex_table_str.split(r"\\")
+    new_rows = list()
+    for row in rows:
+        _row = row
+        if row.count(r"\hline") > 1:
+            _row = _row.replace(r"\hline", "").strip()
+            _row = f"\hline {_row}"
+        new_rows.append(_row)
+
+    return "\\\\\n".join(new_rows)
+
+
 def convert_latex_table_to_pandas(
     latex_table_str: str,
     headers: Union[bool, Sequence[str], None] = None,
 ) -> pd.DataFrame:
-    process_latex_table_str = re.sub(_latex_table_begin_pattern, "", latex_table_str)
-    process_latex_table_str = re.sub(_latex_table_end_pattern, "", process_latex_table_str)
-    rows = process_latex_table_str.replace("\n", " ").strip().split(r"\\")
-    rows = [row.strip() for row in rows if "&" in row]  # 過濾掉無關的行
+    processed_latex_table_str = preprocess_latex_table_string(latex_table_str)
+    rows = [row.strip() for row in processed_latex_table_str.split(r"\\") if "&" in row]  # 過濾掉無關的行
 
     # 拆分表格各儲存格
     table_data = [row.replace(r"\\", "").replace(r"\hline", "").strip().split("&") for row in rows]
@@ -78,12 +96,10 @@ def merge_horizontal_cell(
 
     begin_str = result[0]
     end_str = r"\end{tabular}"
-    process_latex_table_str = re.sub(_latex_table_begin_pattern, "", latex_table_str)
-    process_latex_table_str = re.sub(_latex_table_end_pattern, "", process_latex_table_str)
-    process_latex_table_str = process_latex_table_str.replace("\n", " ").strip()
+    processed_latex_table_str = preprocess_latex_table_string(latex_table_str)
 
-    rows_image = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip() and "&" in s]
-    rows_label = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip() and "&" in s]
+    rows_image = [s.strip() for s in processed_latex_table_str.split(r"\\") if s.strip() and "&" in s]
+    rows_label = [s.strip() for s in processed_latex_table_str.split(r"\\") if s.strip() and "&" in s]
     rand_nums = [i for i in range(1, len(rows_image))]
     rng.shuffle(rand_nums)
     rand_nums = rand_nums[:count]
