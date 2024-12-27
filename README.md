@@ -4,6 +4,7 @@
 
 ```bash
 sudo apt install wkhtmltopdf
+bash install-pandoc.sh
 ```
 
 ## Note
