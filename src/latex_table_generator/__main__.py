@@ -3,6 +3,7 @@
 import argparse
 import logging
 import os
+import pprint
 import random
 from os import PathLike
 from pathlib import Path
@@ -30,8 +31,10 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument(
         "-m", "--merge_method", type=str, choices=["random", "vertical", "horizontal"], default="random", help="Merge method"
     )
-    parser.add_argument("-c", "--contents", type=str, nargs="+", default=[], help="Merged cell content, will random choice")
+    parser.add_argument("-vc", "--v_contents", type=str, nargs="+", default=[], help="Merged cell content, will random choice")
+    parser.add_argument("-hc", "--h_contents", type=str, nargs="+", default=[], help="Merged cell content, will random choice")
     parser.add_argument("-s", "--seed", type=str, default=None, help="Random seed")
+    parser.add_argument("--specific_headers", type=str, nargs="+", default=[], help="Choice column name to merge")
 
     args = parser.parse_args()
 
@@ -42,7 +45,9 @@ def main(
     input_path: PathLike,
     output_path: PathLike,
     merge_method: str = "random",
-    contents: List[str] = ["彎鉤", "鋼材筋"],
+    h_contents: List[str] = ["開口補強"],
+    v_contents: List[str] = ["彎鉤", "鋼材筋"],
+    specific_headers: List[str] = [".*備註.*", ".*圖[例示].*"],
     **kwds,
 ):
     from matplotlib import pyplot as plt
@@ -68,7 +73,6 @@ def main(
             continue
 
         logger.info(f"Run {filename.name}")
-        rand_content_index = rng.randint(0, len(contents) - 1)
 
         with filename.open("r", encoding="utf-8") as f:
             latex_table_str = f.read()
@@ -77,28 +81,34 @@ def main(
             if merge_method == "random":
                 _rand_num = rng.randint(0, 1)
                 if _rand_num == 0:
+                    rand_content_index = rng.randint(0, len(h_contents) - 1)
                     latex_table_image_str, latex_table_label_str = merge_horizontal_cell(
-                        latex_table_str,
+                        latex_table_str=latex_table_str,
                         rng=rng,
-                        content=contents[rand_content_index],
+                        content=h_contents[rand_content_index],
                     )
                 else:
+                    rand_content_index = rng.randint(0, len(v_contents) - 1)
                     latex_table_image_str, latex_table_label_str = merge_vertical_cell(
-                        latex_table_str,
+                        latex_table_str=latex_table_str,
                         rng=rng,
-                        content=contents[rand_content_index],
+                        content=v_contents[rand_content_index],
+                        specific_headers=specific_headers,
                     )
             elif merge_method == "vertical":
+                rand_content_index = rng.randint(0, len(v_contents) - 1)
                 latex_table_image_str, latex_table_label_str = merge_vertical_cell(
-                    latex_table_str,
+                    latex_table_str=latex_table_str,
                     rng=rng,
-                    content=contents[rand_content_index],
+                    content=v_contents[rand_content_index],
+                    specific_headers=specific_headers,
                 )
             elif merge_method == "horizontal":
+                rand_content_index = rng.randint(0, len(h_contents) - 1)
                 latex_table_image_str, latex_table_label_str = merge_horizontal_cell(
-                    latex_table_str,
+                    latex_table_str=latex_table_str,
                     rng=rng,
-                    content=contents[rand_content_index],
+                    content=h_contents[rand_content_index],
                 )
             else:
                 raise ValueError("merge_method should choice from ['random', 'vertical', 'horizontal']")
@@ -138,9 +148,17 @@ if __name__ == "__main__":
     args = arg_parser()
 
     # Pre-process arguments
-    if not args.seed:
-        delattr(args, "seed")
-    if not args.contents:
-        delattr(args, "contents")
+    check_arguments = [
+        "seed",
+        "h_contents",
+        "v_contents",
+        "specific_headers",
+    ]
+    for check_argument in check_arguments:
+        if not getattr(args, check_argument):
+            delattr(args, check_argument)
 
-    main(**vars(args))
+    args = vars(args)
+    print(pprint.pformat(args))
+
+    main(**args)

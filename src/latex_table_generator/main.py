@@ -80,9 +80,10 @@ def merge_horizontal_cell(
     end_str = r"\end{tabular}"
     process_latex_table_str = re.sub(_latex_table_begin_pattern, "", latex_table_str)
     process_latex_table_str = re.sub(_latex_table_end_pattern, "", process_latex_table_str)
+    process_latex_table_str = process_latex_table_str.replace("\n", " ").strip()
 
-    rows_image = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip()]
-    rows_label = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip()]
+    rows_image = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip() and "&" in s]
+    rows_label = [s.strip() for s in process_latex_table_str.split(r"\\") if s.strip() and "&" in s]
     rand_nums = [i for i in range(1, len(rows_image))]
     rng.shuffle(rand_nums)
     rand_nums = rand_nums[:count]
@@ -90,10 +91,12 @@ def merge_horizontal_cell(
     for rand_num in rand_nums:  # 執行 count 次
         texts = rows_image[rand_num].replace(r"\hline", "").strip().split("&")
         texts_str = content if content else texts[rng.randint(0, len(texts) - 1)]
-        texts_str_repeat = "&".join([texts_str for _ in range(len(texts))])
+        texts_str_label = "&".join([texts_str for _ in range(len(texts))])
         rows_image[rand_num] = rf"\hline \multicolumn{{{len(texts)}}}{{|c|}}{{{texts_str}}}"
-        rows_label[rand_num] = f"\hline {texts_str_repeat}"
+        rows_label[rand_num] = f"\hline {texts_str_label}"
 
+    rows_image.append(r"\hline")
+    rows_label.append(r"\hline")
     latex_table_image_str = "\\\\\n".join(rows_image)
     latex_table_label_str = "\\\\\n".join(rows_label)
     return (
@@ -108,6 +111,7 @@ def merge_vertical_cell(
     count: int = 1,
     content: str = None,
     vertical: Tuple[int, Tuple[int, int]] = 1,
+    specific_headers: Sequence[str] = None,
     **kwds,
 ) -> Tuple[str, str]:
     logger.debug("Run merge_vertical_cell")
@@ -131,6 +135,17 @@ def merge_vertical_cell(
     rand_nums = rand_nums[:count]
     logger.debug(f"rand_nums: {rand_nums}")
 
+    col_names = list()
+    if specific_headers:
+        for i, col_name in enumerate(table.columns):
+            for specific_header in specific_headers:
+                if re.match(specific_header, col_name):
+                    col_names.append((i, col_name))
+    else:
+        col_names = [(i, col_name) for i, col_name in enumerate(table.columns)]
+
+    assert col_names, f"Can not find {specific_headers} column name"
+
     for rand_num in rand_nums:  # 執行 count 次
         # 檢查 vertical
         if isinstance(vertical, int):
@@ -142,8 +157,9 @@ def merge_vertical_cell(
 
         added_multirow = False  # 是否已經加過 multirow 的狀態
         start_add_cline = False  # 是否要開始加 cline 的狀態
-        col = rng.randint(0, len(table.columns) - 1)
-        logger.debug(f"col: {col}")
+        rng.shuffle(col_names)
+        col, col_name = col_names[0]
+        logger.debug(f"col: {col}, name: {col_name}")
 
         for i in range(len(table)):
             contents_image = list()
