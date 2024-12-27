@@ -7,7 +7,7 @@ import pprint
 import random
 from os import PathLike
 from pathlib import Path
-from typing import List
+from typing import List, Tuple, Union
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
@@ -35,6 +35,7 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("-hc", "--h_contents", type=str, nargs="+", default=[], help="Merged cell content, will random choice")
     parser.add_argument("-s", "--seed", type=str, default=None, help="Random seed")
     parser.add_argument("--specific_headers", type=str, nargs="+", default=[], help="Choice column name to merge")
+    parser.add_argument("--vertical", type=str, nargs="+", default=[], help="Vertical length can be range")
 
     args = parser.parse_args()
 
@@ -48,6 +49,7 @@ def main(
     h_contents: List[str] = ["開口補強"],
     v_contents: List[str] = ["彎鉤", "鋼材筋"],
     specific_headers: List[str] = [".*備註.*"],
+    vertical: Union[int, Tuple[int, int]] = [1, 5],
     **kwds,
 ):
     from matplotlib import pyplot as plt
@@ -94,6 +96,7 @@ def main(
                         rng=rng,
                         content=v_contents[rand_content_index],
                         specific_headers=specific_headers,
+                        vertical=vertical,
                     )
             elif merge_method == "vertical":
                 rand_content_index = rng.randint(0, len(v_contents) - 1)
@@ -102,6 +105,7 @@ def main(
                     rng=rng,
                     content=v_contents[rand_content_index],
                     specific_headers=specific_headers,
+                    vertical=vertical,
                 )
             elif merge_method == "horizontal":
                 rand_content_index = rng.randint(0, len(h_contents) - 1)
@@ -156,6 +160,17 @@ if __name__ == "__main__":
     for check_argument in check_arguments:
         if not getattr(args, check_argument):
             delattr(args, check_argument)
+
+    if len(args.vertical) > 1:
+        args.vertical = (
+            [int(args.vertical[0]), int(args.vertical[1])]
+            if int(args.vertical[0]) < int(args.vertical[1])
+            else [int(args.vertical[1]), int(args.vertical[0])]
+        )
+    elif len(args.vertical) == 1:
+        args.vertical = int(args.vertical[0])
+    else:
+        delattr(args, "vertical")
 
     args = vars(args)
     print(pprint.pformat(args))
