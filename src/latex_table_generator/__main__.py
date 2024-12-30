@@ -66,6 +66,7 @@ if __name__ == "__main__":
     input_paths = args.pop("input_path")
     for input_path in input_paths:
         subfolder_paths = get_subfolder_path(input_path)
+        print(f"subfolder_paths: {subfolder_paths}")
         for subfolder_path in subfolder_paths:
             main(
                 input_path=subfolder_path,

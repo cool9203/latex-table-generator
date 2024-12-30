@@ -60,6 +60,7 @@ def get_subfolder_path(
     find_paths = [path]
     while find_paths:
         find_path = Path(find_paths.pop(0))
+        logger.debug(f"get_subfolder_path: Search {find_path!s}")
 
         status = [False for _ in range(len(targets))]
         for i, target in enumerate(targets):
@@ -76,6 +77,7 @@ def get_subfolder_path(
 
         for folder in find_path.iterdir():
             if folder.is_dir():
+                logger.debug(f"get_subfolder_path: Add {folder!s}")
                 find_paths.append(folder)
     return subfolder_paths
 
