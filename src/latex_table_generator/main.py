@@ -400,6 +400,7 @@ def latex_table_to_image(
                     "quality": str(quality),
                     "width": str(width),
                     "quiet": "",
+                    "enable-local-file-access": "",
                 },
             )
             image = PILImage.open(Path(temp_dir, "temp.jpg"))
