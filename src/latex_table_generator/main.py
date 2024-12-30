@@ -186,7 +186,7 @@ def merge_vertical_cell(
     table = convert_latex_table_to_pandas(latex_table_str, headers=True)
     rows_image = [r"\hline " + " & ".join([str(c) for c in table.columns])]
     rows_label = [r"\hline " + " & ".join([str(c) for c in table.columns])]
-    rand_nums = [i for i in range(0, len(table) - 1, 3)]
+    rand_nums = [i for i in range(0, len(table) - 1, 2)]
     rng.shuffle(rand_nums)
     rand_nums = sorted(rand_nums[:count])
     logger.debug(f"rand_nums: {rand_nums}")
@@ -215,7 +215,9 @@ def merge_vertical_cell(
             else:
                 raise TypeError(f"vertical should be int or tuple. But got '{vertical}'")
 
-            if rand_num_index == len(rand_nums) - 1 or multirow_num + rand_num <= rand_nums[rand_num_index + 1]:
+            if multirow_num + rand_num <= len(table) and (
+                rand_num_index == len(rand_nums) - 1 or multirow_num + rand_num <= rand_nums[rand_num_index + 1]
+            ):
                 index = [rand_num + n for n in range(multirow_num)]
                 multirow_index.append(index)
                 all_multirow_index.extend(index)
@@ -226,14 +228,13 @@ def merge_vertical_cell(
     for i in range(len(table)):
         contents_image = list()
         contents_label = list()
-
         if i in all_multirow_index:  # add multirow and cline
-            for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
-                multirow_data = np.array([index.index(i) if i in index else -1 for index in multirow_index])
-                index = np.nonzero(multirow_data + 1)[0][0]
-                col, col_name = all_col_names[index]
-                logger.debug(f"col: {col}, name: {col_name}")
+            multirow_data = np.array([multirow.index(i) if i in multirow else -1 for multirow in multirow_index])
+            index = np.nonzero(multirow_data + 1)[0][0]
+            col, col_name = all_col_names[index]
+            logger.debug(f"col: {col}, name: {col_name}")
 
+            for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
                 if j == col:  # 若是是要 multirow 的欄位
                     multirow_num = len(multirow_index[index])
                     rand_num = rand_nums[index]
@@ -455,7 +456,7 @@ if __name__ == "__main__":
 \end{tabular}"""
 
     latex_table_image_str, latex_table_label_str = merge_vertical_cell(
-        latex_table_str, rng=rng, content="以下空白", count=3, vertical=(1, 4)
+        latex_table_str, rng=rng, contents=["以下空白"], count=3, vertical=(1, 4)
     )
     logger.debug(latex_table_image_str)
     logger.debug(latex_table_label_str)
