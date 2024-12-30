@@ -17,7 +17,7 @@ import tqdm as TQDM
 from matplotlib import pyplot as plt
 from PIL import Image as PILImage
 
-from latex_table_generator.base import MatLike, crop_table_bbox, get_image
+from latex_table_generator.base import MatLike, crop_table_bbox, draw_table_bbox, get_image, paste_image_with_table_bbox
 from latex_table_generator.camelot_base import ExtractedTable, run_table_detect
 
 _latex_table_begin_pattern = r"\\begin{tabular}{.*}"
@@ -351,18 +351,6 @@ def main(
     tqdm: bool = True,
     **kwds,
 ):
-    from matplotlib import pyplot as plt
-
-    from latex_table_generator.base import draw_table_bbox, paste_image_with_table_bbox
-    from latex_table_generator.main import (
-        PILImage,
-        convert_latex_table_to_pandas,
-        get_fit_size_latex_table_to_image,
-        merge_horizontal_cell,
-        merge_vertical_cell,
-        run_table_detect,
-    )
-
     rng = random.Random(kwds.get("seed", os.environ.get("SEED", None)))
     iter_data = [d for d in Path(input_path).glob(r"*.txt")]
     iter_data = TQDM.tqdm(iter_data, desc=str(input_path)) if tqdm else iter_data
@@ -388,13 +376,13 @@ def main(
                     latex_table_image_str, latex_table_label_str = merge_horizontal_cell(
                         latex_table_str=latex_table_str,
                         rng=rng,
-                        content=h_contents,
+                        contents=h_contents,
                     )
                 else:
                     latex_table_image_str, latex_table_label_str = merge_vertical_cell(
                         latex_table_str=latex_table_str,
                         rng=rng,
-                        content=v_contents,
+                        contents=v_contents,
                         specific_headers=specific_headers,
                         vertical=vertical,
                     )
@@ -402,7 +390,7 @@ def main(
                 latex_table_image_str, latex_table_label_str = merge_vertical_cell(
                     latex_table_str=latex_table_str,
                     rng=rng,
-                    content=v_contents,
+                    contents=v_contents,
                     specific_headers=specific_headers,
                     vertical=vertical,
                 )
@@ -410,7 +398,7 @@ def main(
                 latex_table_image_str, latex_table_label_str = merge_horizontal_cell(
                     latex_table_str=latex_table_str,
                     rng=rng,
-                    content=h_contents,
+                    contents=h_contents,
                 )
             else:
                 raise ValueError("merge_method should choice from ['random', 'vertical', 'horizontal']")
