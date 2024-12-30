@@ -127,6 +127,7 @@ def merge_horizontal_cell(
     rng: random.Random = None,
     count: int = 1,
     contents: Union[Sequence[str], str] = None,
+    horizontal: Union[int, Tuple[int, int]] = 1,
     **kwds,
 ) -> Tuple[str, str]:
     # TODO: 支援可以少數欄水平合併
@@ -272,6 +273,115 @@ def merge_vertical_cell(
     )
 
 
+def merge_vertical_and_horizontal_cell(
+    latex_table_str: str,
+    rng: random.Random = None,
+    count: int = 1,
+    contents: Union[Sequence[str], str] = None,
+    vertical: Union[int, Tuple[int, int]] = 1,
+    horizontal: Union[int, Tuple[int, int]] = 1,
+) -> Tuple[str, str]:
+    logger.debug("Run merge_vertical_and_horizontal_cell")
+    result = re.findall(_latex_table_begin_pattern, latex_table_str)
+    if not result:
+        raise ValueError("Not latex table")
+    elif "multicolumn" in latex_table_str:
+        raise ValueError("Not support convert have multicolumn latex")
+
+    begin_str = result[0]
+    end_str = r"\end{tabular}"
+
+    table = convert_latex_table_to_pandas(latex_table_str, headers=True)
+    rows_image = [r"\hline " + " & ".join([str(c) for c in table.columns])]
+    rows_label = [r"\hline " + " & ".join([str(c) for c in table.columns])]
+    rand_nums = [i for i in range(0, len(table) - 1, 2)]
+    rng.shuffle(rand_nums)
+    rand_nums = sorted(rand_nums[:count])
+    logger.debug(f"rand_nums: {rand_nums}")
+
+    col_names = list()
+    for i, col_name in enumerate(table.columns):
+        # 檢查 horizontal
+        if isinstance(horizontal, int):
+            col_span = horizontal + 1
+        elif isinstance(horizontal, (tuple, list)) and len(horizontal) >= 2:
+            col_span = rng.randint(horizontal[0], min(horizontal[1], len(table.columns))) + 1
+        else:
+            raise TypeError(f"horizontal should be int or tuple. But got '{horizontal}'")
+        col_names.append(([i + col for col in range(col_span)], col_name))
+
+    # 預先決定 multirow 要合併的列
+    multirow_index = list()
+    all_multirow_index = list()
+    all_col_names = list()
+    for rand_num_index, rand_num in enumerate(rand_nums):
+        while True:
+            # 檢查 vertical
+            if isinstance(vertical, int):
+                row_span = vertical + 1
+            elif isinstance(vertical, (tuple, list)) and len(vertical) >= 2:
+                row_span = rng.randint(vertical[0], min(vertical[1], len(table) - rand_num)) + 1
+            else:
+                raise TypeError(f"vertical should be int or tuple. But got '{vertical}'")
+
+            if row_span + rand_num <= len(table) and (
+                rand_num_index == len(rand_nums) - 1 or row_span + rand_num <= rand_nums[rand_num_index + 1]
+            ):
+                index = [rand_num + n for n in range(row_span)]
+                multirow_index.append(index)
+                all_multirow_index.extend(index)
+                rng.shuffle(col_names)
+                all_col_names.append(col_names[0])
+                break
+
+    for i in range(len(table)):
+        contents_image = list()
+        contents_label = list()
+        if i in all_multirow_index:  # add multirow and cline
+            multirow_data = np.array([multirow.index(i) if i in multirow else -1 for multirow in multirow_index])
+            index = np.nonzero(multirow_data + 1)[0][0]
+            col, col_name = all_col_names[index]
+            logger.debug(f"col: {col}, name: {col_name}")
+
+            for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
+                if j in col:  # 若是是要 multirow 的欄位
+                    row_span = len(multirow_index[index])
+                    rand_num = rand_nums[index]
+                    logger.debug(f"row_span: {row_span}")
+
+                    _cell_content = contents[rng.randint(0, len(contents) - 1)]
+                    contents_label.append(f"**{row_span} {_cell_content}")
+                    if i in rand_nums:  # multirow 不會重複加, 所以只加第一次
+                        if j == col[0]:
+                            contents_image.append(
+                                rf"\multicolumn{{{len(col)}}}{{|c|}}{{\multirow{{{row_span}}}{{*}}{{{_cell_content}}}}}"
+                            )
+                        else:
+                            pass
+
+                    else:
+                        contents_image.append("")
+                else:
+                    contents_image.append(v)
+                    contents_label.append(v)
+        else:
+            contents_image = [str(e) for e in table.iloc[i]]
+            contents_label = [str(e) for e in table.iloc[i]]
+        contents_image = " & ".join(contents_image)
+        contents_label = " & ".join(contents_label)
+        rows_image.append(rf"\hline {contents_image}" if r"\cline" not in contents_image else contents_image)
+        rows_label.append(rf"\hline {contents_label}" if r"\cline" not in contents_label else contents_label)
+
+    rows_image.append(r"\hline")
+    rows_label.append(r"\hline")
+    final_latex_table_image_str = " \\\\\n".join(rows_image)
+    final_latex_table_label_str = " \\\\\n".join(rows_label)
+    return (
+        f"{begin_str}\n{final_latex_table_image_str}\n{end_str}",
+        f"{begin_str}\n{final_latex_table_label_str}\n{end_str}",
+    )
+
+
 def latex_table_to_image(
     latex_table_str: str,
     css: str = _default_css,
@@ -347,8 +457,10 @@ def main(
     merge_method: str = "random",
     h_contents: List[str] = ["開口補強"],
     v_contents: List[str] = ["彎鉤", "鋼材筋"],
+    vh_contents: List[str] = ["開口補強", "鋼材筋"],
     specific_headers: List[str] = [".*備註.*"],
     vertical: Union[int, Tuple[int, int]] = [1, 5],
+    horizontal: Union[int, Tuple[int, int]] = [1, 5],
     tqdm: bool = True,
     **kwds,
 ):
@@ -372,20 +484,28 @@ def main(
 
         try:
             if merge_method == "random":
-                _rand_num = rng.randint(0, 1)
+                _rand_num = rng.randint(0, 2)
                 if _rand_num == 0:
                     latex_table_image_str, latex_table_label_str = merge_horizontal_cell(
                         latex_table_str=latex_table_str,
                         rng=rng,
                         contents=h_contents,
                     )
-                else:
+                elif _rand_num == 1:
                     latex_table_image_str, latex_table_label_str = merge_vertical_cell(
                         latex_table_str=latex_table_str,
                         rng=rng,
                         contents=v_contents,
                         specific_headers=specific_headers,
                         vertical=vertical,
+                    )
+                else:
+                    latex_table_image_str, latex_table_label_str = merge_vertical_and_horizontal_cell(
+                        latex_table_str=latex_table_str,
+                        rng=rng,
+                        contents=vh_contents,
+                        vertical=vertical,
+                        horizontal=horizontal,
                     )
             elif merge_method == "vertical":
                 latex_table_image_str, latex_table_label_str = merge_vertical_cell(
@@ -400,6 +520,14 @@ def main(
                     latex_table_str=latex_table_str,
                     rng=rng,
                     contents=h_contents,
+                )
+            elif merge_method == "hybrid":
+                latex_table_image_str, latex_table_label_str = merge_vertical_and_horizontal_cell(
+                    latex_table_str=latex_table_str,
+                    rng=rng,
+                    contents=vh_contents,
+                    vertical=vertical,
+                    horizontal=horizontal,
                 )
             else:
                 raise ValueError("merge_method should choice from ['random', 'vertical', 'horizontal']")
@@ -455,7 +583,7 @@ if __name__ == "__main__":
 \hline
 \end{tabular}"""
 
-    latex_table_image_str, latex_table_label_str = merge_vertical_cell(
+    latex_table_image_str, latex_table_label_str = merge_vertical_and_horizontal_cell(
         latex_table_str, rng=rng, contents=["以下空白"], count=3, vertical=(1, 4)
     )
     logger.debug(latex_table_image_str)

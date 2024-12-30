@@ -19,7 +19,12 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("-i", "--input_path", type=str, nargs="+", required=True, help="Input path(folder)")
     parser.add_argument("-o", "--output_path", required=True, help="Output path")
     parser.add_argument(
-        "-m", "--merge_method", type=str, choices=["random", "vertical", "horizontal"], default="random", help="Merge method"
+        "-m",
+        "--merge_method",
+        type=str,
+        choices=["random", "vertical", "horizontal", "hybrid"],
+        default="random",
+        help="Merge method",
     )
     parser.add_argument("-vc", "--v_contents", type=str, nargs="+", default=[], help="Merged cell content, will random choice")
     parser.add_argument("-hc", "--h_contents", type=str, nargs="+", default=[], help="Merged cell content, will random choice")
