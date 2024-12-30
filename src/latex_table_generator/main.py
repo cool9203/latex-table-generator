@@ -4,14 +4,16 @@ import logging
 import os
 import random
 import re
+from os import PathLike
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Sequence, Tuple, Union
+from typing import List, Sequence, Tuple, Union
 
 import imgkit
 import numpy as np
 import pandas as pd
 import pypandoc
+import tqdm as TQDM
 from matplotlib import pyplot as plt
 from PIL import Image as PILImage
 
@@ -45,6 +47,37 @@ _default_css = r"""<style>
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
+
+
+def get_subfolder_path(
+    path: PathLike,
+    targets: Sequence[Union[str, Sequence[str]]] = (
+        ("*.jpg", "*.png"),
+        ("*.txt"),
+    ),
+) -> List[Path]:
+    subfolder_paths = list()
+    find_paths = [path]
+    while find_paths:
+        find_path = Path(find_paths.pop(0))
+
+        status = [False for _ in range(len(targets))]
+        for i, target in enumerate(targets):
+            if isinstance(target, str):
+                if [p for p in Path(find_path).glob(target)]:
+                    status[i] = True
+            else:
+                for _target in target:
+                    if [p for p in Path(find_path).glob(_target)]:
+                        status[i] = True
+
+        if np.array(status).all():
+            subfolder_paths.append(find_path)
+
+        for folder in find_path.iterdir():
+            if folder.is_dir():
+                find_paths.append(folder)
+    return subfolder_paths
 
 
 def preprocess_latex_table_string(
@@ -296,6 +329,111 @@ def get_fit_size_latex_table_to_image(
             )
         )
     return image
+
+
+def main(
+    input_path: PathLike,
+    output_path: PathLike,
+    merge_method: str = "random",
+    h_contents: List[str] = ["開口補強"],
+    v_contents: List[str] = ["彎鉤", "鋼材筋"],
+    specific_headers: List[str] = [".*備註.*"],
+    vertical: Union[int, Tuple[int, int]] = [1, 5],
+    tqdm: bool = True,
+    **kwds,
+):
+    from matplotlib import pyplot as plt
+
+    from latex_table_generator.base import draw_table_bbox, paste_image_with_table_bbox
+    from latex_table_generator.main import (
+        PILImage,
+        convert_latex_table_to_pandas,
+        get_fit_size_latex_table_to_image,
+        merge_horizontal_cell,
+        merge_vertical_cell,
+        run_table_detect,
+    )
+
+    rng = random.Random(kwds.get("seed", os.environ.get("SEED", None)))
+    iter_data = [d for d in Path(input_path).glob(r"*.txt")]
+    iter_data = TQDM.tqdm(iter_data, desc=str(input_path)) if tqdm else iter_data
+    logger.debug(input_path) if tqdm else logger.info(input_path)
+    for index, filename in enumerate(iter_data):
+        if Path(input_path, f"{filename.stem}.jpg").exists():
+            file_image = PILImage.open(Path(input_path, f"{filename.stem}.jpg"))
+        elif Path(input_path, f"{filename.stem}.png").exists():
+            file_image = PILImage.open(Path(input_path, f"{filename.stem}.png"))
+        else:
+            logger.info(f"Not found {filename}.jpg or {filename}.png, skip file")
+            continue
+
+        logger.debug(f"Run {filename.name}") if tqdm else logger.info(f"Run [{index+1}/{len(iter_data)}] {filename.name}")
+
+        with filename.open("r", encoding="utf-8") as f:
+            latex_table_str = f.read()
+
+        try:
+            if merge_method == "random":
+                _rand_num = rng.randint(0, 1)
+                if _rand_num == 0:
+                    rand_content_index = rng.randint(0, len(h_contents) - 1)
+                    latex_table_image_str, latex_table_label_str = merge_horizontal_cell(
+                        latex_table_str=latex_table_str,
+                        rng=rng,
+                        content=h_contents[rand_content_index],
+                    )
+                else:
+                    rand_content_index = rng.randint(0, len(v_contents) - 1)
+                    latex_table_image_str, latex_table_label_str = merge_vertical_cell(
+                        latex_table_str=latex_table_str,
+                        rng=rng,
+                        content=v_contents[rand_content_index],
+                        specific_headers=specific_headers,
+                        vertical=vertical,
+                    )
+            elif merge_method == "vertical":
+                rand_content_index = rng.randint(0, len(v_contents) - 1)
+                latex_table_image_str, latex_table_label_str = merge_vertical_cell(
+                    latex_table_str=latex_table_str,
+                    rng=rng,
+                    content=v_contents[rand_content_index],
+                    specific_headers=specific_headers,
+                    vertical=vertical,
+                )
+            elif merge_method == "horizontal":
+                rand_content_index = rng.randint(0, len(h_contents) - 1)
+                latex_table_image_str, latex_table_label_str = merge_horizontal_cell(
+                    latex_table_str=latex_table_str,
+                    rng=rng,
+                    content=h_contents[rand_content_index],
+                )
+            else:
+                raise ValueError("merge_method should choice from ['random', 'vertical', 'horizontal']")
+
+            logger.debug(latex_table_image_str)
+
+            Path(output_path).mkdir(exist_ok=True, parents=True)
+            tables = run_table_detect(file_image)
+            if tables:
+                image = get_fit_size_latex_table_to_image(
+                    latex_table_str=latex_table_image_str,
+                    file_image=file_image,
+                    table=tables[0],
+                )
+                _ = convert_latex_table_to_pandas(
+                    latex_table_str=latex_table_label_str,
+                    headers=True,
+                )
+                final_image = draw_table_bbox(src=file_image, tables=tables, margin=5)
+                final_image = paste_image_with_table_bbox(src=final_image, dst=image, table=tables[0], margin=10)
+                plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
+                with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                    f.write(latex_table_label_str)
+            else:
+                logger.info(f"Not detect table, so skip {filename.name}")
+        except Exception as e:
+            logger.exception(e)
+            logger.error(f"{filename.name} have error")
 
 
 if __name__ == "__main__":
