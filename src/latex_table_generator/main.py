@@ -174,9 +174,6 @@ def merge_vertical_cell(
     **kwds,
 ) -> Tuple[str, str]:
     logger.debug("Run merge_vertical_cell")
-    if count != 1:
-        raise NotImplementedError("Not support count > 1")
-
     result = re.findall(_latex_table_begin_pattern, latex_table_str)
     if not result:
         raise ValueError("Not latex table")
@@ -189,11 +186,10 @@ def merge_vertical_cell(
     table = convert_latex_table_to_pandas(latex_table_str, headers=True)
     rows_image = [r"\hline " + " & ".join([str(c) for c in table.columns])]
     rows_label = [r"\hline " + " & ".join([str(c) for c in table.columns])]
-    rand_nums = [i for i in range(len(table) - 1)]
+    rand_nums = [i for i in range(0, len(table) - 1, 3)]
     rng.shuffle(rand_nums)
-    rand_nums = rand_nums[:count]
+    rand_nums = sorted(rand_nums[:count])
     logger.debug(f"rand_nums: {rand_nums}")
-
     col_names = list()
     if specific_headers:
         for i, col_name in enumerate(table.columns):
@@ -205,54 +201,61 @@ def merge_vertical_cell(
 
     assert col_names, f"Can not find {specific_headers} column name"
 
-    for rand_num in rand_nums:  # 執行 count 次
-        # 檢查 vertical
-        if isinstance(vertical, int):
-            multirow_num = vertical + 1
-        elif isinstance(vertical, (tuple, list)) and len(vertical) >= 2:
-            multirow_num = rng.randint(vertical[0], min(vertical[1], len(table) - rand_num)) + 1
-        else:
-            raise TypeError(f"vertical should be int or tuple. But got '{vertical}'")
-
-        added_multirow = False  # 是否已經加過 multirow 的狀態
-        start_add_cline = False  # 是否要開始加 cline 的狀態
-        rng.shuffle(col_names)
-        col, col_name = col_names[0]
-        logger.debug(f"col: {col}, name: {col_name}")
-
-        for i in range(len(table)):
-            contents_image = list()
-            contents_label = list()
-            _cell_contents = table[table.columns[col]].iloc[rand_num : rand_num + multirow_num].values
-            _cell_content = content if content else _cell_contents[rng.randint(0, len(_cell_contents) - 1)]
-            if i in [rand_num + n for n in range(multirow_num)]:  # add multirow and cline
-                for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
-                    if j == col:  # 若是是要 multirow 的欄位
-                        contents_label.append(f"**{multirow_num} {_cell_content}")
-                        if not added_multirow:  # multirow 不會重複加, 所以只加第一次
-                            contents_image.append(rf"\multirow{{{multirow_num}}}{{*}}{{{_cell_content}}}")
-                            added_multirow = True
-                        else:
-                            contents_image.append("")
-                    else:
-                        contents_image.append(v)
-                        contents_label.append(v)
-
-                if start_add_cline:  # 增加 cline, range 為 [1, len(columns)]
-                    if col == 0:  # 邊界 0
-                        contents_image[0] = rf"\cline{{{col+2}-{len(table.columns)}}} {contents_image[0]}"
-                    elif col == len(table.columns) - 1:  # 邊界 len-1
-                        contents_image[0] = rf"\cline{{1-{len(table.columns) - 1}}} {contents_image[0]}"
-                    else:
-                        contents_image[0] = rf"\cline{{1-{col}}} \cline{{{col+2}-{len(table.columns)}}} {contents_image[0]}"
-                start_add_cline = True
+    # 預先決定要合併的列
+    multirow_index = list()
+    all_multirow_index = list()
+    all_col_names = list()
+    for rand_num_index, rand_num in enumerate(rand_nums):
+        while True:
+            # 檢查 vertical
+            if isinstance(vertical, int):
+                multirow_num = vertical + 1
+            elif isinstance(vertical, (tuple, list)) and len(vertical) >= 2:
+                multirow_num = rng.randint(vertical[0], min(vertical[1], len(table) - rand_num)) + 1
             else:
-                contents_image = [str(e) for e in table.iloc[i]]
-                contents_label = [str(e) for e in table.iloc[i]]
-            contents_image = " & ".join(contents_image)
-            contents_label = " & ".join(contents_label)
-            rows_image.append(rf"\hline {contents_image}" if r"\cline" not in contents_image else contents_image)
-            rows_label.append(rf"\hline {contents_label}" if r"\cline" not in contents_label else contents_label)
+                raise TypeError(f"vertical should be int or tuple. But got '{vertical}'")
+
+            if rand_num_index == len(rand_nums) - 1 or multirow_num + rand_num <= rand_nums[rand_num_index + 1]:
+                index = [rand_num + n for n in range(multirow_num)]
+                multirow_index.append(index)
+                all_multirow_index.extend(index)
+                rng.shuffle(col_names)
+                all_col_names.append(col_names[0])
+                break
+
+    for i in range(len(table)):
+        contents_image = list()
+        contents_label = list()
+
+        if i in all_multirow_index:  # add multirow and cline
+            for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
+                multirow_data = np.array([index.index(i) if i in index else -1 for index in multirow_index])
+                index = np.nonzero(multirow_data + 1)[0][0]
+                col, col_name = all_col_names[index]
+                logger.debug(f"col: {col}, name: {col_name}")
+
+                if j == col:  # 若是是要 multirow 的欄位
+                    multirow_num = len(multirow_index[index])
+                    rand_num = rand_nums[index]
+                    logger.debug(f"multirow_num: {multirow_num}")
+
+                    _cell_contents = table[table.columns[col]].iloc[rand_num : rand_num + multirow_num].values
+                    _cell_content = content if content else _cell_contents[rng.randint(0, len(_cell_contents) - 1)]
+                    contents_label.append(f"**{multirow_num} {_cell_content}")
+                    if i in rand_nums:  # multirow 不會重複加, 所以只加第一次
+                        contents_image.append(rf"\multirow{{{multirow_num}}}{{*}}{{{_cell_content}}}")
+                    else:
+                        contents_image.append("")
+                else:
+                    contents_image.append(v)
+                    contents_label.append(v)
+        else:
+            contents_image = [str(e) for e in table.iloc[i]]
+            contents_label = [str(e) for e in table.iloc[i]]
+        contents_image = " & ".join(contents_image)
+        contents_label = " & ".join(contents_label)
+        rows_image.append(rf"\hline {contents_image}" if r"\cline" not in contents_image else contents_image)
+        rows_label.append(rf"\hline {contents_label}" if r"\cline" not in contents_label else contents_label)
 
     rows_image.append(r"\hline")
     rows_label.append(r"\hline")
@@ -446,6 +449,12 @@ if __name__ == "__main__":
     \hline 2 & 彎料 & \#4 & 80 & 80 & & 340 & 720 & 2433 & \\
     \hline 3 & 彎料 & \#4 & 65 & 80 & & 310 & 10 & 31 & \\
     \hline 4 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & 2922 & \\
+    \hline 5 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & 2922 & \\
+    \hline 6 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & 2922 & \\
+    \hline 7 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & 2922 & \\
+    \hline 8 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & 2922 & \\
+    \hline 9 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & 2922 & \\
+    \hline 10 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & 2922 & \\
     \hline
     \end{tabular}"""
 
@@ -457,7 +466,9 @@ if __name__ == "__main__":
 \hline
 \end{tabular}"""
 
-    latex_table_image_str, latex_table_label_str = merge_vertical_cell(latex_table_str, rng=rng, content="以下空白")
+    latex_table_image_str, latex_table_label_str = merge_vertical_cell(
+        latex_table_str, rng=rng, content="以下空白", count=3, vertical=(1, 4)
+    )
     logger.debug(latex_table_image_str)
     logger.debug(latex_table_label_str)
 
@@ -465,6 +476,7 @@ if __name__ == "__main__":
 
     image = latex_table_to_image(
         latex_table_image_str,
+        padding=2,
     )
     if image:
         image.save("outputs/origin-output.png")
@@ -475,6 +487,7 @@ if __name__ == "__main__":
 
     image = latex_table_to_image(
         latex_table_label_str,
+        padding=2,
     )
     if image:
         image.save("outputs/origin-label.png")
