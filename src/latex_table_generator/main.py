@@ -126,7 +126,7 @@ def merge_horizontal_cell(
     latex_table_str: str,
     rng: random.Random = None,
     count: int = 1,
-    content: str = None,
+    contents: Union[Sequence[str], str] = None,
     **kwds,
 ) -> Tuple[str, str]:
     # TODO: 支援可以少數欄水平合併
@@ -149,7 +149,7 @@ def merge_horizontal_cell(
 
     for rand_num in rand_nums:  # 執行 count 次
         texts = rows_image[rand_num].replace(r"\hline", "").strip().split("&")
-        texts_str = content if content else texts[rng.randint(0, len(texts) - 1)]
+        texts_str = contents[rng.randint(0, len(contents) - 1)] if contents else texts[rng.randint(0, len(texts) - 1)]
         texts_str_label = "&".join([texts_str for _ in range(len(texts))])
         rows_image[rand_num] = rf"\hline \multicolumn{{{len(texts)}}}{{|c|}}{{{texts_str}}}"
         rows_label[rand_num] = f"\hline {texts_str_label}"
@@ -168,7 +168,7 @@ def merge_vertical_cell(
     latex_table_str: str,
     rng: random.Random = None,
     count: int = 1,
-    content: str = None,
+    contents: Union[Sequence[str], str] = None,
     vertical: Union[int, Tuple[int, int]] = 1,
     specific_headers: Sequence[str] = None,
     **kwds,
@@ -240,7 +240,11 @@ def merge_vertical_cell(
                     logger.debug(f"multirow_num: {multirow_num}")
 
                     _cell_contents = table[table.columns[col]].iloc[rand_num : rand_num + multirow_num].values
-                    _cell_content = content if content else _cell_contents[rng.randint(0, len(_cell_contents) - 1)]
+                    _cell_content = (
+                        contents[rng.randint(0, len(contents) - 1)]
+                        if contents
+                        else _cell_contents[rng.randint(0, len(_cell_contents) - 1)]
+                    )
                     contents_label.append(f"**{multirow_num} {_cell_content}")
                     if i in rand_nums:  # multirow 不會重複加, 所以只加第一次
                         contents_image.append(rf"\multirow{{{multirow_num}}}{{*}}{{{_cell_content}}}")
@@ -381,36 +385,32 @@ def main(
             if merge_method == "random":
                 _rand_num = rng.randint(0, 1)
                 if _rand_num == 0:
-                    rand_content_index = rng.randint(0, len(h_contents) - 1)
                     latex_table_image_str, latex_table_label_str = merge_horizontal_cell(
                         latex_table_str=latex_table_str,
                         rng=rng,
-                        content=h_contents[rand_content_index],
+                        content=h_contents,
                     )
                 else:
-                    rand_content_index = rng.randint(0, len(v_contents) - 1)
                     latex_table_image_str, latex_table_label_str = merge_vertical_cell(
                         latex_table_str=latex_table_str,
                         rng=rng,
-                        content=v_contents[rand_content_index],
+                        content=v_contents,
                         specific_headers=specific_headers,
                         vertical=vertical,
                     )
             elif merge_method == "vertical":
-                rand_content_index = rng.randint(0, len(v_contents) - 1)
                 latex_table_image_str, latex_table_label_str = merge_vertical_cell(
                     latex_table_str=latex_table_str,
                     rng=rng,
-                    content=v_contents[rand_content_index],
+                    content=v_contents,
                     specific_headers=specific_headers,
                     vertical=vertical,
                 )
             elif merge_method == "horizontal":
-                rand_content_index = rng.randint(0, len(h_contents) - 1)
                 latex_table_image_str, latex_table_label_str = merge_horizontal_cell(
                     latex_table_str=latex_table_str,
                     rng=rng,
-                    content=h_contents[rand_content_index],
+                    content=h_contents,
                 )
             else:
                 raise ValueError("merge_method should choice from ['random', 'vertical', 'horizontal']")
