@@ -33,8 +33,20 @@ def arg_parser() -> argparse.Namespace:
         default="random",
         help="Merge method",
     )
-    parser.add_argument("-vc", "--v_contents", type=str, nargs="+", default=[], help="Merged cell content, will random choice")
-    parser.add_argument("-hc", "--h_contents", type=str, nargs="+", default=[], help="Merged cell content, will random choice")
+    parser.add_argument(
+        "-vc", "--v_contents", type=str, nargs="+", default=[], help="Merged vertical cell content, will random choice"
+    )
+    parser.add_argument(
+        "-hc", "--h_contents", type=str, nargs="+", default=[], help="Merged horizontal cell content, will random choice"
+    )
+    parser.add_argument(
+        "-vhc",
+        "--vh_contents",
+        type=str,
+        nargs="+",
+        default=[],
+        help="Merged horizontal and vertical cell content, will random choice",
+    )
     parser.add_argument("-s", "--seed", type=str, default=None, help="Random seed")
     parser.add_argument("--specific_headers", type=str, nargs="+", default=[], help="Choice column name to merge")
     parser.add_argument("--vertical", type=str, nargs="+", default=[], help="Vertical length can be range")
