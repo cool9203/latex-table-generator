@@ -59,7 +59,6 @@ def run_table_detect(
         borderless_tables=False,
     )
     if not tables:
-        print("borderless")
         tables = doc.extract_tables(
             implicit_rows=implicit_rows,
             implicit_columns=implicit_columns,
