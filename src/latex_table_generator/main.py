@@ -447,10 +447,12 @@ def latex_table_to_image(
     width: Union[str, int] = 2048,
     **kwds,
 ) -> PILImage.Image:
+    html = css.format(**kwds) + "\n" + pypandoc.convert_text(latex_table_str, "html", format="latex")
+    logger.debug(html)
     with TemporaryDirectory(prefix="latex_temp") as temp_dir:
         try:
             imgkit.from_string(
-                css.format(**kwds) + "\n" + pypandoc.convert_text(latex_table_str, "html", format="latex"),
+                html,
                 str(Path(temp_dir, "temp.jpg")),
                 options={
                     "format": format,
@@ -491,7 +493,7 @@ def get_fit_size_latex_table_to_image(
         )
     )
 
-    for padding in np.arange(max_paddings, 1.0, step if step < 0 else (-1) * step):
+    for padding in np.arange(max_paddings, 0.0, step if step < 0 else (-1) * step):
         # Check image board size
         if (table.bbox.y1 + image.shape[0]) <= table.bbox.y2 and (table.bbox.x1 + image.shape[1]) <= table.bbox.x2:
             break
@@ -639,7 +641,7 @@ if __name__ == "__main__":
     \hline 7 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & 2922 & \\
     \hline 8 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & 2922 & \\
     \hline 9 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & 2922 & \\
-    \hline 10 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & 2922 & \\
+    \hline 10 & 彎料 & \#4 & 10 & 81 & 12 & 105 & 2800 & \includegraphics{/mnt/d/Dprogram/latex-table-generator/steel.png} & \\
     \hline
     \end{tabular}"""
 
