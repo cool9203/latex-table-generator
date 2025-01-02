@@ -538,15 +538,15 @@ def main(
         with filename.open("r", encoding="utf-8") as f:
             latex_table_str = f.read()
 
-        # Fill image
-        latex_table_str = filling_image_to_cell(
-            latex_table_str=latex_table_str,
-            rng=rng,
-            image_paths=image_paths,
-            image_specific_headers=image_specific_headers,
-        )
-
         try:
+            # Fill image
+            latex_table_str = filling_image_to_cell(
+                latex_table_str=latex_table_str,
+                rng=rng,
+                image_paths=image_paths,
+                image_specific_headers=image_specific_headers,
+            )
+
             if merge_method == "random":
                 _rand_num = rng.randint(0, 2)
                 if _rand_num == 0:
