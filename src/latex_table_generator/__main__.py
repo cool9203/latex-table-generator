@@ -1,7 +1,14 @@
 # coding: utf-8
 
 import argparse
+import logging
+import os
 import pprint
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler())
+logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 
 def arg_parser() -> argparse.Namespace:
@@ -31,6 +38,7 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("-s", "--seed", type=str, default=None, help="Random seed")
     parser.add_argument("--specific_headers", type=str, nargs="+", default=[], help="Choice column name to merge")
     parser.add_argument("--vertical", type=str, nargs="+", default=[], help="Vertical length can be range")
+    parser.add_argument("--image_paths", type=str, nargs="+", default=[], help="Paste to table cell image data path")
     parser.add_argument("--tqdm", action="store_true", help="Use tqdm to show progress bar")
 
     args = parser.parse_args()
@@ -52,6 +60,7 @@ if __name__ == "__main__":
         if not getattr(args, check_argument):
             delattr(args, check_argument)
 
+    # Process vertical argument
     if len(args.vertical) > 1:
         args.vertical = (
             [int(args.vertical[0]), int(args.vertical[1])]
@@ -63,6 +72,21 @@ if __name__ == "__main__":
     else:
         delattr(args, "vertical")
 
+    # Process image_path argument
+    image_paths = list()
+    for image_folder_path in args.image_paths:
+        path = Path(image_folder_path)
+        if path.is_dir() and path.exists():
+            logger.debug(f"Load '{path!s}' image data path")
+            for image_path in path.iterdir():
+                image_paths.append(str(image_path.resolve()))
+        elif path.is_file() and path.exists():
+            logger.debug(f"Load '{path!s}' image")
+            image_paths.append(str(path.resolve()))
+        else:
+            logger.debug(f"Not Load '{image_folder_path}' image data path, path not exists")
+    args.image_paths = image_paths
+
     args = vars(args)
     print(pprint.pformat(args))
 
@@ -71,7 +95,7 @@ if __name__ == "__main__":
     input_paths = args.pop("input_path")
     for input_path in input_paths:
         subfolder_paths = get_subfolder_path(input_path)
-        print(f"subfolder_paths: {subfolder_paths}")
+        logger.debug(f"subfolder_paths: {subfolder_paths}")
         for subfolder_path in subfolder_paths:
             main(
                 input_path=subfolder_path,

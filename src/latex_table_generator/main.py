@@ -17,7 +17,13 @@ import tqdm as TQDM
 from matplotlib import pyplot as plt
 from PIL import Image as PILImage
 
-from latex_table_generator.base import MatLike, crop_table_bbox, draw_table_bbox, get_image, paste_image_with_table_bbox
+from latex_table_generator.base import (
+    MatLike,
+    crop_table_bbox,
+    draw_table_bbox,
+    get_image,
+    paste_image_with_table_bbox,
+)
 from latex_table_generator.camelot_base import ExtractedTable, run_table_detect
 
 _latex_table_begin_pattern = r"\\begin{tabular}{.*}"
@@ -127,6 +133,49 @@ def convert_latex_table_to_pandas(
     elif headers:
         df = pd.DataFrame(cleaned_data)
     return df
+
+
+def filling_image_to_cell(
+    latex_table_str: str,
+    image_paths: List[str],
+    image_specific_headers: List[str],
+    rng: random.Random = None,
+) -> str:
+    logger.debug("Run filling_image_to_cell")
+    result = re.findall(_latex_table_begin_pattern, latex_table_str)
+    if not result:
+        raise ValueError("Not latex table")
+    elif "multicolumn" in latex_table_str:
+        raise ValueError("Not support convert have multicolumn latex")
+
+    begin_str = result[0]
+    end_str = r"\end{tabular}"
+
+    table = convert_latex_table_to_pandas(latex_table_str, headers=True)
+    rows = [r"\hline " + " & ".join([str(c) for c in table.columns])]
+    col_names: List[Tuple[int, str, bool]] = list()
+    for i, col_name in enumerate(table.columns):
+        for specific_header in image_specific_headers:
+            if re.match(specific_header, col_name):
+                col_names.append((i, col_name))
+
+    for i in range(len(table)):
+        contents = list()
+        col, col_name = col_names[0]
+        logger.debug(f"col: {col}, name: {col_name}")
+
+        for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
+            if j == col and v:  # 若是是要替換 image 的欄位
+                index = rng.randint(0, len(image_paths) - 1)
+                contents.append(rf"\includegraphics{{{image_paths[index]}}}")
+            else:
+                contents.append(v)
+        contents_str = " & ".join(contents)
+        rows.append(rf"\hline {contents_str}" if r"\cline" not in contents_str else contents_str)
+
+    rows.append(r"\hline")
+    final_latex_table_image_str = " \\\\\n".join(rows)
+    return f"{begin_str}\n{final_latex_table_image_str}\n{end_str}"
 
 
 def merge_horizontal_cell(
@@ -287,6 +336,7 @@ def merge_vertical_and_horizontal_cell(
     contents: Union[Sequence[str], str] = None,
     vertical: Union[int, Tuple[int, int]] = 1,
     horizontal: Union[int, Tuple[int, int]] = 1,
+    **kwds,
 ) -> Tuple[str, str]:
     logger.debug("Run merge_vertical_and_horizontal_cell")
     result = re.findall(_latex_table_begin_pattern, latex_table_str)
@@ -469,6 +519,8 @@ def main(
     specific_headers: List[str] = [".*備註.*"],
     vertical: Union[int, Tuple[int, int]] = [1, 5],
     horizontal: Union[int, Tuple[int, int]] = [1, 5],
+    image_paths: List[str] = None,
+    image_specific_headers: List[str] = [".*圖示.*", ".*加工[形型]狀.*"],
     tqdm: bool = True,
     **kwds,
 ):
@@ -489,6 +541,14 @@ def main(
 
         with filename.open("r", encoding="utf-8") as f:
             latex_table_str = f.read()
+
+        # Fill image
+        latex_table_str = filling_image_to_cell(
+            latex_table_str=latex_table_str,
+            rng=rng,
+            image_paths=image_paths,
+            image_specific_headers=image_specific_headers,
+        )
 
         try:
             if merge_method == "random":
