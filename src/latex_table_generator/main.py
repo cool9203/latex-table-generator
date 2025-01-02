@@ -24,8 +24,11 @@ from latex_table_generator.base import (
     get_image,
     paste_image_with_table_bbox,
 )
-from latex_table_generator.camelot_base import ExtractedTable, run_table_detect
+from latex_table_generator.camelot_base import ExtractedTable
+from latex_table_generator.camelot_base import run_table_detect as run_table_detect_camelot
+from latex_table_generator.image2table import run_table_detect as run_table_detect_img2table
 
+_latex_includegraphics_pattern = r"\\includegraphics{(.*.(?:jpg|png|JPG|PNG))}"
 _latex_table_begin_pattern = r"\\begin{tabular}{.*}"
 _latex_table_end_pattern = r"\\end{tabular}"
 _default_css = r"""<style>
@@ -619,7 +622,8 @@ def main(
             logger.debug(latex_table_image_str)
 
             Path(output_path).mkdir(exist_ok=True, parents=True)
-            tables = run_table_detect(file_image)
+            tables = run_table_detect_camelot(file_image)
+            tables = run_table_detect_img2table(file_image) if not tables else tables
             if tables:
                 image = get_fit_size_latex_table_to_image(
                     latex_table_str=latex_table_image_str,
@@ -634,8 +638,17 @@ def main(
                 final_image = draw_table_bbox(src=file_image, tables=tables, margin=5)
                 final_image = paste_image_with_table_bbox(src=final_image, dst=image, table=tables[0], margin=10)
                 plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
+
+                # Convert image to label
+                new_latex_table_label_str = latex_table_label_str
+                for r in re.finditer(_latex_includegraphics_pattern, latex_table_label_str):
+                    path = Path(str(r.group(1)))
+                    with Path(path.parent.resolve(), path.stem + ".txt").open("r", encoding="utf-8") as f:
+                        label = f.read()
+                    new_latex_table_label_str = re.sub(str(r.group(0)).replace("\\", "\\\\"), label, new_latex_table_label_str)
+
                 with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
-                    f.write(latex_table_label_str)
+                    f.write(new_latex_table_label_str)
             else:
                 logger.info(f"Not detect table, so skip {filename.name}")
         except Exception as e:
@@ -683,7 +696,7 @@ if __name__ == "__main__":
     )
     if image:
         image.save("outputs/origin-output.png")
-        tables = run_table_detect(image)
+        tables = run_table_detect_camelot(image)
         crop_table_images = crop_table_bbox(src=image, tables=tables, margin=10)
         if crop_table_images:
             plt.imsave("outputs/output.png", crop_table_images[0])
@@ -695,7 +708,7 @@ if __name__ == "__main__":
     )
     if image:
         image.save("outputs/origin-label.png")
-        tables = run_table_detect(image)
+        tables = run_table_detect_camelot(image)
         crop_table_images = crop_table_bbox(src=image, tables=tables, margin=10)
         if crop_table_images:
             plt.imsave("outputs/label.png", crop_table_images[0])
