@@ -39,6 +39,12 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("--specific_headers", type=str, nargs="+", default=[], help="Choice column name to merge")
     parser.add_argument("--vertical", type=str, nargs="+", default=[], help="Vertical length can be range")
     parser.add_argument("--image_paths", type=str, nargs="+", default=[], help="Paste to table cell image data path")
+    parser.add_argument(
+        "-h_count", "--horizontal_count", type=int, nargs="+", default=[1, 3], help="Merge horizontal Run times in a image"
+    )
+    parser.add_argument(
+        "-v_count", "--vertical_count", type=int, nargs="+", default=[1, 3], help="Merge vertical Run times in a image"
+    )
     parser.add_argument("--tqdm", action="store_true", help="Use tqdm to show progress bar")
 
     args = parser.parse_args()
@@ -49,28 +55,36 @@ def arg_parser() -> argparse.Namespace:
 if __name__ == "__main__":
     args = arg_parser()
 
-    # Pre-process arguments
     check_arguments = [
         "seed",
         "h_contents",
         "v_contents",
         "specific_headers",
     ]
+    range_arguments = [
+        "vertical",
+        "horizontal_count",
+        "vertical_count",
+    ]
+
+    # Pre-process arguments
     for check_argument in check_arguments:
         if not getattr(args, check_argument):
             delattr(args, check_argument)
 
-    # Process vertical argument
-    if len(args.vertical) > 1:
-        args.vertical = (
-            [int(args.vertical[0]), int(args.vertical[1])]
-            if int(args.vertical[0]) < int(args.vertical[1])
-            else [int(args.vertical[1]), int(args.vertical[0])]
-        )
-    elif len(args.vertical) == 1:
-        args.vertical = int(args.vertical[0])
-    else:
-        delattr(args, "vertical")
+    # Process range argument
+    for range_argument in range_arguments:
+        arg = getattr(args, range_argument)
+        if len(arg) > 1:
+            setattr(
+                args,
+                range_argument,
+                [int(arg[0]), int(arg[1])] if int(arg[0]) < int(arg[1]) else [int(arg[1]), int(arg[0])],
+            )
+        elif len(arg) == 1:
+            setattr(args, range_argument, int(arg[0]))
+        else:
+            delattr(args, range_argument)
 
     # Process image_path argument
     image_paths = list()

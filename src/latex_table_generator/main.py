@@ -152,6 +152,8 @@ def filling_image_to_cell(
             if re.match(specific_header, col_name):
                 col_names.append((i, col_name))
 
+    assert col_names, f"Can not find {image_specific_headers} column name"
+
     for i in range(len(table)):
         contents = list()
         col, col_name = col_names[0]
@@ -255,6 +257,7 @@ def merge_vertical_cell(
     multirow_index = list()
     all_multirow_index = list()
     all_col_names = list()
+    all_cell_contents = list()
     for rand_num_index, rand_num in enumerate(rand_nums):
         while True:
             # 檢查 vertical
@@ -273,6 +276,7 @@ def merge_vertical_cell(
                 all_multirow_index.extend(index)
                 rng.shuffle(col_names)
                 all_col_names.append(col_names[0])
+                all_cell_contents.append(contents[rng.randint(0, len(contents) - 1)] if contents else None)
                 break
 
     for i in range(len(table)):
@@ -292,8 +296,8 @@ def merge_vertical_cell(
 
                     _cell_contents = table[table.columns[col]].iloc[rand_num : rand_num + multirow_num].values
                     _cell_content = (
-                        contents[rng.randint(0, len(contents) - 1)]
-                        if contents
+                        all_cell_contents[index]
+                        if all_cell_contents[index]
                         else _cell_contents[rng.randint(0, len(_cell_contents) - 1)]
                     )
                     contents_label.append(f"**{multirow_num} {_cell_content}")
@@ -364,6 +368,7 @@ def merge_vertical_and_horizontal_cell(
     multirow_index = list()
     all_multirow_index = list()
     all_col_names = list()
+    all_cell_contents = list()
     for rand_num_index, rand_num in enumerate(rand_nums):
         while True:
             # 檢查 vertical
@@ -382,6 +387,7 @@ def merge_vertical_and_horizontal_cell(
                 all_multirow_index.extend(index)
                 rng.shuffle(col_names)
                 all_col_names.append(col_names[0])
+                all_cell_contents.append(contents[rng.randint(0, len(contents) - 1)])
                 break
 
     for i in range(len(table)):
@@ -399,7 +405,7 @@ def merge_vertical_and_horizontal_cell(
                     rand_num = rand_nums[index]
                     logger.debug(f"row_span: {row_span}")
 
-                    _cell_content = contents[rng.randint(0, len(contents) - 1)]
+                    _cell_content = all_cell_contents[index]
                     contents_label.append(f"**{row_span} {_cell_content}")
                     if i in rand_nums:  # multirow 不會重複加, 所以只加第一次
                         if j == col[0]:
@@ -514,8 +520,10 @@ def main(
     specific_headers: List[str] = [".*備註.*"],
     vertical: Union[int, Tuple[int, int]] = [1, 5],
     horizontal: Union[int, Tuple[int, int]] = [1, 5],
+    vertical_count: Union[int, Tuple[int, int]] = [1, 3],
+    horizontal_count: Union[int, Tuple[int, int]] = [1, 3],
     image_paths: List[str] = None,
-    image_specific_headers: List[str] = [".*圖示.*", ".*加工[形型]狀.*"],
+    image_specific_headers: List[str] = [".*圖示.*", ".*(?:加工)?[形型]狀.*"],
     css: str = _default_css,
     tqdm: bool = True,
     **kwds,
@@ -554,6 +562,9 @@ def main(
                         latex_table_str=latex_table_str,
                         rng=rng,
                         contents=h_contents,
+                        count=horizontal_count
+                        if isinstance(horizontal_count, int)
+                        else rng.randint(horizontal_count[0], horizontal_count[1]),
                     )
                 elif _rand_num == 1:
                     latex_table_image_str, latex_table_label_str = merge_vertical_cell(
@@ -562,6 +573,9 @@ def main(
                         contents=v_contents,
                         specific_headers=specific_headers,
                         vertical=vertical,
+                        count=vertical_count
+                        if isinstance(vertical_count, int)
+                        else rng.randint(vertical_count[0], vertical_count[1]),
                     )
                 else:
                     latex_table_image_str, latex_table_label_str = merge_vertical_and_horizontal_cell(
@@ -578,12 +592,18 @@ def main(
                     contents=v_contents,
                     specific_headers=specific_headers,
                     vertical=vertical,
+                    count=vertical_count
+                    if isinstance(vertical_count, int)
+                    else rng.randint(vertical_count[0], vertical_count[1]),
                 )
             elif merge_method == "horizontal":
                 latex_table_image_str, latex_table_label_str = merge_horizontal_cell(
                     latex_table_str=latex_table_str,
                     rng=rng,
                     contents=h_contents,
+                    count=horizontal_count
+                    if isinstance(horizontal_count, int)
+                    else rng.randint(horizontal_count[0], horizontal_count[1]),
                 )
             elif merge_method == "hybrid":
                 latex_table_image_str, latex_table_label_str = merge_vertical_and_horizontal_cell(
