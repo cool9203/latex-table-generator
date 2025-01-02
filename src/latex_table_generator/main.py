@@ -36,11 +36,18 @@ _default_css = r"""<style>
         width: 100%;
     }}
 
-    td {{
+    td:not(:has(img)) {{
         padding-top: {padding}rem;
         padding-bottom: {padding}rem;
         padding-left: {padding}rem;
         padding-right: {padding}rem;
+    }}
+
+    td:has(img) {{
+        padding-top: 0rem;
+        padding-bottom: 0rem;
+        padding-left: 0rem;
+        padding-right: 0rem;
     }}
 </style>"""
 
