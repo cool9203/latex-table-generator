@@ -441,7 +441,7 @@ def merge_vertical_and_horizontal_cell(
 
 def latex_table_to_image(
     latex_table_str: str,
-    css: str = _default_css,
+    css: str,
     format: str = "jpeg",
     quality: Union[str, int] = "100",
     width: Union[str, int] = 2048,
@@ -474,7 +474,7 @@ def get_fit_size_latex_table_to_image(
     latex_table_str: str,
     file_image: PILImage.Image,
     table: ExtractedTable,
-    css: str = _default_css,
+    css: str,
     format: str = "jpeg",
     quality: Union[str, int] = "100",
     max_paddings: float = 3.0,
@@ -523,6 +523,7 @@ def main(
     horizontal: Union[int, Tuple[int, int]] = [1, 5],
     image_paths: List[str] = None,
     image_specific_headers: List[str] = [".*圖示.*", ".*加工[形型]狀.*"],
+    css: str = _default_css,
     tqdm: bool = True,
     **kwds,
 ):
@@ -611,6 +612,7 @@ def main(
                     latex_table_str=latex_table_image_str,
                     file_image=file_image,
                     table=tables[0],
+                    css=css,
                 )
                 _ = convert_latex_table_to_pandas(
                     latex_table_str=latex_table_label_str,
@@ -662,7 +664,8 @@ if __name__ == "__main__":
     Path("./outputs").mkdir(exist_ok=True)
 
     image = latex_table_to_image(
-        latex_table_image_str,
+        latex_table_str=latex_table_image_str,
+        css=_default_css,
         padding=2,
     )
     if image:
@@ -673,7 +676,8 @@ if __name__ == "__main__":
             plt.imsave("outputs/output.png", crop_table_images[0])
 
     image = latex_table_to_image(
-        latex_table_label_str,
+        latex_table_str=latex_table_label_str,
+        css=_default_css,
         padding=2,
     )
     if image:
