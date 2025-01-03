@@ -152,7 +152,7 @@ def filling_image_to_cell(
     col_names: List[Tuple[int, str, bool]] = list()
     for i, col_name in enumerate(table.columns):
         for specific_header in image_specific_headers:
-            if re.match(specific_header, col_name):
+            if re.match(specific_header, col_name.replace("状", "狀")):
                 col_names.append((i, col_name))
 
     assert col_names, f"Can not find {image_specific_headers} column name"
