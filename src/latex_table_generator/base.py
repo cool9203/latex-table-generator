@@ -7,10 +7,72 @@ from typing import List, Tuple, Union
 import cv2
 import numpy as np
 from cv2.typing import MatLike
+from img2table.document.base.rotation import estimate_skew, get_connected_components, get_relevant_angles
 from img2table.tables.objects.extraction import ExtractedTable
 from PIL import Image as PILImage
 
 InputType = Union[str, Path, bytes, io.BytesIO, MatLike, PILImage.Image]
+
+
+def rotate_img_with_border(
+    img: np.ndarray,
+    angle: float,
+    background_color: Tuple[int, int, int] = (255, 255, 255),
+) -> np.ndarray:
+    """
+    Rotate an image of the defined angle and add background on border
+    :param img: image array
+    :param angle: rotation angle
+    :param background_color: background color for borders after rotation
+    :return: rotated image array
+    """
+    # Compute image center
+    height, width = (img.shape[0], img.shape[1])
+    image_center = (width // 2, height // 2)
+
+    # Compute rotation matrix
+    rotation_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
+
+    # Get rotated image dimension
+    bound_w = int(height * abs(rotation_mat[0, 1]) + width * abs(rotation_mat[0, 0]))
+    bound_h = int(height * abs(rotation_mat[0, 0]) + width * abs(rotation_mat[0, 1]))
+
+    # Update rotation matrix
+    rotation_mat[0, 2] += bound_w / 2 - image_center[0]
+    rotation_mat[1, 2] += bound_h / 2 - image_center[1]
+
+    # Create rotated image with white background
+    rotated_img = cv2.warpAffine(
+        img, rotation_mat, (bound_w, bound_h), borderMode=cv2.BORDER_CONSTANT, borderValue=background_color
+    )
+    return rotated_img
+
+
+def fix_rotation_image(
+    img: np.ndarray,
+) -> Tuple[np.ndarray, bool]:
+    """
+    Fix rotation of input image (based on https://www.mdpi.com/2079-9292/9/1/55) by at most 45 degrees
+    :param img: image array
+    :return: rotated image array and boolean indicating if the image has been rotated
+    """
+    # Get connected components of the images
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    cc_centroids, ref_height, thresh = get_connected_components(img=gray)
+
+    # Check number of centroids
+    if len(cc_centroids) < 2:
+        return img, False
+
+    # Compute most likely angles from connected components
+    angles = get_relevant_angles(centroids=cc_centroids, ref_height=ref_height)
+    # Estimate skew
+    skew_angle = estimate_skew(angles=angles, thresh=thresh)
+
+    if abs(skew_angle) > 0:
+        return rotate_img_with_border(img=img, angle=skew_angle), True
+
+    return img, False
 
 
 def paste_image_with_table_bbox(
