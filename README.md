@@ -9,6 +9,10 @@ bash install-pandoc.sh
 cd ..
 ```
 
+## How to use
+
+Reference: [run.sh](/scripts/run.sh)
+
 ## Note
 
 ### Dockerfile
