@@ -3,6 +3,7 @@
 from collections import OrderedDict
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import List
 
 from camelot.parsers import Lattice
 from img2table.tables.objects.extraction import BBox, ExtractedTable, TableCell
@@ -17,7 +18,7 @@ from latex_table_generator.base import (
 def run_table_detect(
     src: InputType,
     **kwds,
-):
+) -> List[ExtractedTable]:
     img = get_image(src=src)
     with TemporaryDirectory() as tempdir:
         _path = Path(tempdir, "temp.png")
