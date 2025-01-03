@@ -4,6 +4,7 @@ import logging
 import os
 import random
 import re
+from decimal import ROUND_DOWN, Decimal
 from os import PathLike
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -495,7 +496,13 @@ def get_fit_size_latex_table_to_image(
         )
     )
 
-    for padding in np.arange(max_paddings, 0.0, step if step < 0 else (-1) * step):
+    for padding in sorted(
+        [
+            float(Decimal(p).quantize(Decimal(".01"), rounding=ROUND_DOWN))
+            for p in np.arange(max_paddings, 0.0, step if step < 0 else (-1) * step)
+        ],
+        reverse=True,
+    ):
         # Check image board size
         if (table.bbox.y1 + image.shape[0]) <= table.bbox.y2 and (table.bbox.x1 + image.shape[1]) <= table.bbox.x2:
             break
