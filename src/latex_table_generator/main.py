@@ -10,6 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import List, Sequence, Tuple, Union
 
+import cv2
 import imgkit
 import numpy as np
 import pandas as pd
@@ -22,8 +23,10 @@ from latex_table_generator.base import (
     MatLike,
     crop_table_bbox,
     draw_table_bbox,
+    fix_rotation_image,
     get_image,
     paste_image_with_table_bbox,
+    rotate_img_with_border,
 )
 from latex_table_generator.camelot_base import ExtractedTable
 from latex_table_generator.camelot_base import run_table_detect as run_table_detect_camelot
@@ -473,51 +476,62 @@ def latex_table_to_image(
     return None
 
 
-def get_fit_size_latex_table_to_image(
+def paste_fit_size_latex_table_to_image(
     latex_table_str: str,
     file_image: PILImage.Image,
     table: ExtractedTable,
     css: str,
+    skew_angle: float,
     format: str = "jpeg",
     quality: Union[str, int] = "100",
     max_paddings: float = 3.0,
     step: float = -0.2,
 ) -> PILImage.Image:
     file_image: MatLike = get_image(src=file_image)
+    table_width = int(table.bbox.x2 - table.bbox.x1)
 
-    image = get_image(
-        src=latex_table_to_image(
-            latex_table_str,
-            width=int(table.bbox.x2 - table.bbox.x1),
-            css=css,
-            format=format,
-            quality=quality,
-            padding=max_paddings,
-        )
-    )
-
+    final_image = None
     for padding in sorted(
-        [
+        [max_paddings]
+        + [
             float(Decimal(p).quantize(Decimal(".01"), rounding=ROUND_DOWN))
             for p in np.arange(max_paddings, 0.0, step if step < 0 else (-1) * step)
         ],
         reverse=True,
     ):
-        # Check image board size
-        if (table.bbox.y1 + image.shape[0]) <= table.bbox.y2 and (table.bbox.x1 + image.shape[1]) <= table.bbox.x2:
-            break
-
         image = get_image(
             src=latex_table_to_image(
                 latex_table_str,
-                width=int(table.bbox.x2 - table.bbox.x1),
+                width=table_width,
                 css=css,
                 format=format,
                 quality=quality,
                 padding=padding,
             )
         )
-    return image
+        image = rotate_img_with_border(img=image, angle=skew_angle)
+
+        if image.shape[1] > table_width:
+            scale = table_width / image.shape[1]
+            image = cv2.resize(
+                src=image,
+                dsize=(
+                    int(image.shape[1] * scale),
+                    int(image.shape[0] * scale),
+                ),
+                interpolation=cv2.INTER_AREA,
+            )
+
+        try:
+            final_image = paste_image_with_table_bbox(
+                src=file_image,
+                dst=image,
+                table=table,
+            )
+            break
+        except ValueError as e:
+            pass
+    return final_image
 
 
 def main(
@@ -532,6 +546,7 @@ def main(
     horizontal: Union[int, Tuple[int, int]] = [1, 5],
     vertical_count: Union[int, Tuple[int, int]] = [1, 3],
     horizontal_count: Union[int, Tuple[int, int]] = [1, 3],
+    skew_angle: Union[int, Tuple[int, int]] = [-5, 5],
     image_paths: List[str] = None,
     image_specific_headers: List[str] = [".*圖示.*", ".*(?:加工)?[形型]狀.*"],
     css: str = _default_css,
@@ -550,6 +565,8 @@ def main(
         else:
             logger.info(f"Not found {filename}.jpg or {filename}.png, skip file")
             continue
+        file_image = get_image(src=file_image)
+        (file_image, _) = fix_rotation_image(img=file_image)
 
         logger.debug(f"Run {filename.name}") if tqdm else logger.info(f"Run [{index+1}/{len(iter_data)}] {filename.name}")
 
@@ -632,18 +649,21 @@ def main(
             tables = run_table_detect_camelot(file_image)
             tables = run_table_detect_img2table(file_image) if not tables else tables
             if tables:
-                image = get_fit_size_latex_table_to_image(
-                    latex_table_str=latex_table_image_str,
-                    file_image=file_image,
-                    table=tables[0],
-                    css=css,
-                )
                 _ = convert_latex_table_to_pandas(
                     latex_table_str=latex_table_label_str,
                     headers=True,
                 )
-                final_image = draw_table_bbox(src=file_image, tables=tables, margin=5)
-                final_image = paste_image_with_table_bbox(src=final_image, dst=image, table=tables[0], margin=10)
+                hollow_image = draw_table_bbox(src=file_image, tables=tables, margin=5)
+
+                final_image = paste_fit_size_latex_table_to_image(
+                    latex_table_str=latex_table_image_str,
+                    file_image=hollow_image,
+                    table=tables[0],
+                    css=css,
+                    skew_angle=skew_angle if isinstance(skew_angle, (int, float)) else rng.uniform(skew_angle[0], skew_angle[1]),
+                )
+                if final_image is None:
+                    raise ValueError("Can't paste image")
                 plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
 
                 # Convert image to label

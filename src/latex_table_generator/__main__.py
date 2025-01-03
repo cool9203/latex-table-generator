@@ -61,6 +61,7 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument(
         "-v_count", "--vertical_count", type=int, nargs="+", default=[1, 3], help="Merge vertical Run times in a image"
     )
+    parser.add_argument("--skew_angle", type=int, nargs="+", default=[-5, 5], help="Table image rotate angle")
     parser.add_argument("--tqdm", action="store_true", help="Use tqdm to show progress bar")
 
     args = parser.parse_args()
@@ -81,6 +82,7 @@ if __name__ == "__main__":
         "vertical",
         "horizontal_count",
         "vertical_count",
+        "skew_angle",
     ]
 
     # Pre-process arguments
