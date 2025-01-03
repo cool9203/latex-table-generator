@@ -16,4 +16,5 @@ SEED=99 LOG_LEVEL=INFO \
     --image_path "./steels" \
     --horizontal_count 1 3 \
     --vertical_count 1 3 \
+    --skew_angle -3 3 \
     --tqdm
