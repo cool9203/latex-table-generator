@@ -497,6 +497,7 @@ def paste_fit_size_latex_table_to_image(
 ) -> PILImage.Image:
     file_image: MatLike = get_image(src=file_image)
     table_width = int(table.bbox.x2 - table.bbox.x1)
+    table_height = int(file_image.shape[0] - table.bbox.y1)
 
     final_image = None
     for padding in sorted(
@@ -529,6 +530,9 @@ def paste_fit_size_latex_table_to_image(
                 ),
                 interpolation=cv2.INTER_AREA,
             )
+
+        if image.shape[0] > table_height:
+            continue
 
         try:
             final_image = paste_image_with_table_bbox(
