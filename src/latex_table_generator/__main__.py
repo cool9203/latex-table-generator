@@ -27,8 +27,9 @@ def arg_parser() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description="Auto generate latex table data")
 
-    parser.add_argument("-i", "--input_path", type=str, nargs="+", required=True, help="Input path(folder)")
     parser.add_argument("-o", "--output_path", required=True, help="Output path")
+    parser.add_argument("-i", "--input_path", type=str, nargs="+", default=[], help="Input path(folder)")
+    parser.add_argument("-c", "--count", type=int, default=None, help="Full random generate latex table")
     parser.add_argument(
         "-m",
         "--merge_method",
@@ -127,11 +128,14 @@ if __name__ == "__main__":
     from latex_table_generator.main import get_subfolder_path, main
 
     input_paths = args.pop("input_path")
-    for input_path in input_paths:
-        subfolder_paths = get_subfolder_path(input_path)
-        logger.debug(f"subfolder_paths: {subfolder_paths}")
-        for subfolder_path in subfolder_paths:
-            main(
-                input_path=subfolder_path,
-                **args,
-            )
+    if input_paths:
+        for input_path in input_paths:
+            subfolder_paths = get_subfolder_path(input_path)
+            logger.debug(f"subfolder_paths: {subfolder_paths}")
+            for subfolder_path in subfolder_paths:
+                main(
+                    input_path=subfolder_path,
+                    **args,
+                )
+    else:
+        main(**args)

@@ -1,6 +1,7 @@
 # coding: utf-8
 
 import io
+import random
 from pathlib import Path
 from typing import List, Tuple, Union
 
@@ -8,10 +9,28 @@ import cv2
 import numpy as np
 from cv2.typing import MatLike
 from img2table.document.base.rotation import estimate_skew, get_connected_components, get_relevant_angles
-from img2table.tables.objects.extraction import ExtractedTable
+from img2table.tables.objects.extraction import BBox, ExtractedTable
 from PIL import Image as PILImage
 
 InputType = Union[str, Path, bytes, io.BytesIO, MatLike, PILImage.Image]
+
+
+def run_random_crop_rectangle(
+    src: InputType,
+    rng: random.Random = None,
+) -> List[ExtractedTable]:
+    return [
+        ExtractedTable(
+            bbox=BBox(
+                x1=rng.randint(0, src.shape[1] // 6),
+                y1=rng.randint(0, src.shape[0] // 6),
+                x2=rng.randint(src.shape[1] // 6, src.shape[1]),
+                y2=rng.randint(src.shape[0] // 6, src.shape[0]),
+            ),
+            title=None,
+            content=[],
+        )
+    ]
 
 
 def rotate_img_with_border(
