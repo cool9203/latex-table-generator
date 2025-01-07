@@ -27,8 +27,9 @@ def arg_parser() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description="Auto generate latex table data")
 
-    parser.add_argument("-i", "--input_path", type=str, nargs="+", required=True, help="Input path(folder)")
     parser.add_argument("-o", "--output_path", required=True, help="Output path")
+    parser.add_argument("-i", "--input_path", type=str, nargs="+", default=[], help="Input path(folder)")
+    parser.add_argument("-c", "--count", type=int, default=None, help="Full random generate latex table")
     parser.add_argument(
         "-m",
         "--merge_method",
@@ -62,6 +63,9 @@ def arg_parser() -> argparse.Namespace:
         "-v_count", "--vertical_count", type=int, nargs="+", default=[1, 3], help="Merge vertical Run times in a image"
     )
     parser.add_argument("--skew_angle", type=int, nargs="+", default=[-5, 5], help="Table image rotate angle")
+    parser.add_argument("--new_image_size", type=int, nargs="+", default=[2480, 3508], help="Full random mode new image size")
+    parser.add_argument("--min_crop_size", type=int, default=None, help="Full random mode min table area size")
+    parser.add_argument("--rows_range", type=int, nargs="+", default=[1, 20], help="Full random mode table rows count range")
     parser.add_argument("--tqdm", action="store_true", help="Use tqdm to show progress bar")
 
     args = parser.parse_args()
@@ -83,6 +87,8 @@ if __name__ == "__main__":
         "horizontal_count",
         "vertical_count",
         "skew_angle",
+        "new_image_size",
+        "rows_range",
     ]
 
     # Pre-process arguments
@@ -127,11 +133,14 @@ if __name__ == "__main__":
     from latex_table_generator.main import get_subfolder_path, main
 
     input_paths = args.pop("input_path")
-    for input_path in input_paths:
-        subfolder_paths = get_subfolder_path(input_path)
-        logger.debug(f"subfolder_paths: {subfolder_paths}")
-        for subfolder_path in subfolder_paths:
-            main(
-                input_path=subfolder_path,
-                **args,
-            )
+    if input_paths:
+        for input_path in input_paths:
+            subfolder_paths = get_subfolder_path(input_path)
+            logger.debug(f"subfolder_paths: {subfolder_paths}")
+            for subfolder_path in subfolder_paths:
+                main(
+                    input_path=subfolder_path,
+                    **args,
+                )
+    else:
+        main(**args)

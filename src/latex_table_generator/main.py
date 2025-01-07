@@ -8,7 +8,8 @@ from decimal import ROUND_DOWN, Decimal
 from os import PathLike
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import List, Sequence, Tuple, Union
+from typing import Any, Dict, List, Sequence, Tuple, Union
+from uuid import uuid4
 
 import cv2
 import imgkit
@@ -27,6 +28,7 @@ from latex_table_generator.base import (
     get_image,
     paste_image_with_table_bbox,
     rotate_img_with_border,
+    run_random_crop_rectangle,
 )
 from latex_table_generator.camelot_base import ExtractedTable
 from latex_table_generator.camelot_base import run_table_detect as run_table_detect_camelot
@@ -62,6 +64,49 @@ _default_css = r"""<style>
         padding-right: {padding}rem;
     }}
 </style>"""
+_random_headers = [
+    [
+        {"names": ["編號", "#"], "type": int, "empty": True, "hashtag": False, "sequence": True, "range": None, "choices": None},
+        {"names": ["號數"], "type": int, "empty": False, "hashtag": True, "sequence": False, "range": (1, 20), "choices": None},
+        {
+            "names": ["圖示", "加工形狀", "加工型狀", "形狀", "型狀"],
+            "type": str,
+            "empty": False,
+            "hashtag": False,
+            "sequence": False,
+            "range": None,
+            "choices": None,
+        },
+        {
+            "names": ["長度", "長度(cm)", "總長度", "料長"],
+            "type": int,
+            "empty": False,
+            "hashtag": False,
+            "sequence": False,
+            "range": (1, 2000),
+            "choices": None,
+        },
+        {
+            "names": ["數量", "支數"],
+            "type": int,
+            "empty": False,
+            "hashtag": False,
+            "sequence": False,
+            "range": (1, 2000),
+            "choices": None,
+        },
+        {
+            "names": ["重量", "重量(kg)", "重量Kg"],
+            "type": int,
+            "empty": False,
+            "hashtag": False,
+            "sequence": False,
+            "range": (1, 20000),
+            "choices": None,
+        },
+        {"names": ["備註"], "type": str, "empty": True, "hashtag": False, "sequence": False, "range": None, "choices": None},
+    ]
+]
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
@@ -139,6 +184,60 @@ def convert_latex_table_to_pandas(
     elif headers:
         df = pd.DataFrame(cleaned_data)
     return df
+
+
+def random_generate_latex_table_string(
+    headers: List[Dict[str, Any]],
+    rows_range: Tuple[int, int],
+    rng: random.Random = None,
+) -> str:
+    {"name": ["編號", "#"], "type": int, "empty": True, "hashtag": False, "sequence": True}
+
+    latex_table_str = rf"\begin{{tabular}}{{{'c'.join(['|' for _ in range(len(headers)+1)])}}}"
+
+    # Add column name
+    columns = list()
+    for header in headers:
+        names = header.get("names")
+        columns.append(names[rng.randint(0, len(names) - 1)])
+    latex_table_str += r"\hline " + " & ".join(columns) + " \\\\\n"
+
+    # Add row
+    rows_count = rng.randint(rows_range[0], rows_range[1])
+    sequence_start_index = rng.randint(0, 100)
+    rows = list()
+    for i in range(rows_count):
+        values = list()
+        for header in headers:
+            _type = header.get("type")
+            _empty = header.get("empty", True)
+            _hashtag = header.get("hashtag", False)
+            _sequence = header.get("sequence", False)
+            _range = header.get("range", None)
+            _choices = header.get("choices", None)
+            _type = getattr(__builtins__, _type) if isinstance(_type, str) else _type  # Get type class, ex: <class 'int'>
+
+            value = None
+            if _empty and rng.randint(0, 1) == 1:
+                pass
+            elif issubclass(_type, (int, float)):
+                if _sequence:
+                    value = sequence_start_index + i
+                elif _range:
+                    value = rng.randint(_range[0], _range[1]) if issubclass(_type, int) else rng.uniform(_range[0], _range[1])
+                else:
+                    value = rng.randint(0, 100) if issubclass(_type, int) else rng.uniform(0, 100)
+            elif _choices and issubclass(_type, str):
+                value = _choices[rng.randint(0, len(_choices) - 1)]
+
+            value = str(value) if value is not None else value
+            value = rf"\#{value}" if value is not None and _hashtag else value
+            values.append(value if value is not None else "")
+        rows.append(r"\hline " + " & ".join(values))
+
+    latex_table_str += "\\\\\n".join(rows)
+    latex_table_str += "\\hline\n\\end{tabular}"
+    return latex_table_str
 
 
 def filling_image_to_cell(
@@ -547,8 +646,8 @@ def paste_fit_size_latex_table_to_image(
 
 
 def main(
-    input_path: PathLike,
     output_path: PathLike,
+    input_path: PathLike = None,
     merge_method: str = "random",
     h_contents: List[str] = ["開口補強"],
     v_contents: List[str] = ["彎鉤", "鋼材筋"],
@@ -562,28 +661,56 @@ def main(
     image_paths: List[str] = None,
     image_specific_headers: List[str] = [".*圖示.*", ".*(?:加工)?[形型]狀.*"],
     css: str = _default_css,
+    count: int = 100,
+    new_image_size: Tuple[int, int] = (2480, 3508),
+    min_crop_size: int = None,
+    rows_range: Tuple[int, int] = (1, 20),
     tqdm: bool = True,
     **kwds,
 ):
+    assert input_path is not None or (count is not None and count > 0), "Need pass 'input_path' or 'count'"
+
     rng = random.Random(kwds.get("seed", os.environ.get("SEED", None)))
-    iter_data = [d for d in Path(input_path).glob(r"*.txt")]
-    iter_data = TQDM.tqdm(iter_data, desc=str(input_path)) if tqdm else iter_data
+    full_random_generate = False
+
+    if input_path and Path(input_path).exists():
+        iter_data = [d for d in Path(input_path).glob(r"*.txt")]
+        iter_data = TQDM.tqdm(iter_data, desc=str(input_path)) if tqdm else iter_data
+    else:
+        full_random_generate = True
+        iter_data = list()
+        while len(iter_data) < count:
+            file_id = str(uuid4())
+            if file_id not in iter_data:
+                iter_data.append(Path(file_id))
+        iter_data = TQDM.tqdm(iter_data, desc="Full random generate") if tqdm else iter_data
     logger.debug(input_path) if tqdm else logger.info(input_path)
+
     for index, filename in enumerate(iter_data):
-        if Path(input_path, f"{filename.stem}.jpg").exists():
-            file_image = PILImage.open(Path(input_path, f"{filename.stem}.jpg"))
-        elif Path(input_path, f"{filename.stem}.png").exists():
-            file_image = PILImage.open(Path(input_path, f"{filename.stem}.png"))
+        if not full_random_generate:
+            if Path(input_path, f"{filename.stem}.jpg").exists():
+                file_image = PILImage.open(Path(input_path, f"{filename.stem}.jpg"))
+            elif Path(input_path, f"{filename.stem}.png").exists():
+                file_image = PILImage.open(Path(input_path, f"{filename.stem}.png"))
+            else:
+                logger.info(f"Not found {filename}.jpg or {filename}.png, skip file")
+                continue
+            file_image = get_image(src=file_image)
+            (file_image, _) = fix_rotation_image(img=file_image)
+
+            logger.info(f"Run [{index+1}/{len(iter_data)}] {filename.name}") if not tqdm else None
+
+            with filename.open("r", encoding="utf-8") as f:
+                latex_table_str = f.read()
         else:
-            logger.info(f"Not found {filename}.jpg or {filename}.png, skip file")
-            continue
-        file_image = get_image(src=file_image)
-        (file_image, _) = fix_rotation_image(img=file_image)
-
-        logger.debug(f"Run {filename.name}") if tqdm else logger.info(f"Run [{index+1}/{len(iter_data)}] {filename.name}")
-
-        with filename.open("r", encoding="utf-8") as f:
-            latex_table_str = f.read()
+            file_image = PILImage.new(mode="RGB", size=new_image_size, color=(255, 255, 255))
+            file_image = get_image(src=file_image)
+            latex_table_str = random_generate_latex_table_string(
+                headers=_random_headers[0],
+                rows_range=rows_range,
+                rng=rng,
+            )
+            logger.info(f"Run [{index+1}/{len(iter_data)}]") if not tqdm else None
 
         try:
             # Fill image
@@ -658,8 +785,12 @@ def main(
             logger.debug(latex_table_image_str)
 
             Path(output_path).mkdir(exist_ok=True, parents=True)
-            tables = run_table_detect_camelot(file_image)
-            tables = run_table_detect_img2table(file_image) if not tables else tables
+
+            if not full_random_generate:
+                tables = run_table_detect_camelot(file_image)
+                tables = run_table_detect_img2table(file_image) if not tables else tables
+            else:
+                tables = run_random_crop_rectangle(file_image, min_crop_size=min_crop_size, rng=rng)
             if tables:
                 _ = convert_latex_table_to_pandas(
                     latex_table_str=latex_table_label_str,
