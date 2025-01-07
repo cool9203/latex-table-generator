@@ -30,6 +30,12 @@ from latex_table_generator.base import (
 )
 from latex_table_generator.camelot_base import ExtractedTable
 from latex_table_generator.camelot_base import run_table_detect as run_table_detect_camelot
+from latex_table_generator.errors import (
+    ImagePasteError,
+    NotColumnMatchError,
+    NotLatexError,
+    NotSupportMulticolumnLatexError,
+)
 from latex_table_generator.image2table import run_table_detect as run_table_detect_img2table
 
 _latex_includegraphics_pattern = r"\\includegraphics{(.*.(?:jpg|png|JPG|PNG))}"
@@ -144,9 +150,9 @@ def filling_image_to_cell(
     logger.debug("Run filling_image_to_cell")
     result = re.findall(_latex_table_begin_pattern, latex_table_str)
     if not result:
-        raise ValueError("Not latex table")
+        raise NotLatexError("Not latex table")
     elif "multicolumn" in latex_table_str:
-        raise ValueError("Not support convert have multicolumn latex")
+        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
 
     begin_str = result[0]
     end_str = r"\end{tabular}"
@@ -159,7 +165,8 @@ def filling_image_to_cell(
             if re.match(specific_header, col_name.replace("状", "狀")):
                 col_names.append((i, col_name))
 
-    assert col_names, f"Can not find {image_specific_headers} column name"
+    if not col_names:
+        raise NotColumnMatchError(f"Can not find {image_specific_headers} column name")
 
     for i in range(len(table)):
         contents = list()
@@ -192,9 +199,9 @@ def merge_horizontal_cell(
     logger.debug("Run merge_horizontal_cell")
     result = re.findall(_latex_table_begin_pattern, latex_table_str)
     if not result:
-        raise ValueError("Not latex table")
+        raise NotLatexError("Not latex table")
     elif "multicolumn" in latex_table_str:
-        raise ValueError("Not support convert have multicolumn latex")
+        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
 
     begin_str = result[0]
     end_str = r"\end{tabular}"
@@ -235,9 +242,9 @@ def merge_vertical_cell(
     logger.debug("Run merge_vertical_cell")
     result = re.findall(_latex_table_begin_pattern, latex_table_str)
     if not result:
-        raise ValueError("Not latex table")
+        raise NotLatexError("Not latex table")
     elif "multicolumn" in latex_table_str:
-        raise ValueError("Not support convert have multicolumn latex")
+        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
 
     begin_str = result[0]
     end_str = r"\end{tabular}"
@@ -258,7 +265,8 @@ def merge_vertical_cell(
     else:
         col_names = [(i, col_name) for i, col_name in enumerate(table.columns)]
 
-    assert col_names, f"Can not find {specific_headers} column name"
+    if not col_names:
+        raise NotColumnMatchError(f"Can not find {specific_headers} column name")
 
     # 預先決定要合併的列
     multirow_index = list()
@@ -345,9 +353,9 @@ def merge_vertical_and_horizontal_cell(
     logger.debug("Run merge_vertical_and_horizontal_cell")
     result = re.findall(_latex_table_begin_pattern, latex_table_str)
     if not result:
-        raise ValueError("Not latex table")
+        raise NotLatexError("Not latex table")
     elif "multicolumn" in latex_table_str:
-        raise ValueError("Not support convert have multicolumn latex")
+        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
 
     begin_str = result[0]
     end_str = r"\end{tabular}"
@@ -663,7 +671,7 @@ def main(
                     skew_angle=skew_angle if isinstance(skew_angle, (int, float)) else rng.uniform(skew_angle[0], skew_angle[1]),
                 )
                 if final_image is None:
-                    raise ValueError("Can't paste image")
+                    raise ImagePasteError("Can't paste image")
                 plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
 
                 # Convert image to label
