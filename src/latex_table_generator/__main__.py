@@ -63,6 +63,9 @@ def arg_parser() -> argparse.Namespace:
         "-v_count", "--vertical_count", type=int, nargs="+", default=[1, 3], help="Merge vertical Run times in a image"
     )
     parser.add_argument("--skew_angle", type=int, nargs="+", default=[-5, 5], help="Table image rotate angle")
+    parser.add_argument("--new_image_size", type=int, nargs="+", default=[2480, 3508], help="Full random mode new image size")
+    parser.add_argument("--min_crop_size", type=int, default=None, help="Full random mode min table area size")
+    parser.add_argument("--rows_range", type=int, nargs="+", default=[1, 20], help="Full random mode table rows count range")
     parser.add_argument("--tqdm", action="store_true", help="Use tqdm to show progress bar")
 
     args = parser.parse_args()
@@ -84,6 +87,8 @@ if __name__ == "__main__":
         "horizontal_count",
         "vertical_count",
         "skew_angle",
+        "new_image_size",
+        "rows_range",
     ]
 
     # Pre-process arguments

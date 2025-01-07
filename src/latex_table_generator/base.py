@@ -17,16 +17,18 @@ InputType = Union[str, Path, bytes, io.BytesIO, MatLike, PILImage.Image]
 
 def run_random_crop_rectangle(
     src: InputType,
+    min_crop_size: int,
     rng: random.Random = None,
 ) -> List[ExtractedTable]:
+    (x1, y1, x2, y2) = (0, 0, 0, 0)
+    while min_crop_size and (x2 - x1) * (y2 - y1) < min_crop_size:
+        x1 = rng.randint(0, src.shape[1] // 6)
+        y1 = rng.randint(0, src.shape[0] // 6)
+        x2 = rng.randint(src.shape[1] // 6, src.shape[1])
+        y2 = rng.randint(src.shape[0] // 6, src.shape[0])
     return [
         ExtractedTable(
-            bbox=BBox(
-                x1=rng.randint(0, src.shape[1] // 6),
-                y1=rng.randint(0, src.shape[0] // 6),
-                x2=rng.randint(src.shape[1] // 6, src.shape[1]),
-                y2=rng.randint(src.shape[0] // 6, src.shape[0]),
-            ),
+            bbox=BBox(x1=x1, y1=y1, x2=x2, y2=y2),
             title=None,
             content=[],
         )

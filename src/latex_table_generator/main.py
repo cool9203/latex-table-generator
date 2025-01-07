@@ -188,7 +188,7 @@ def convert_latex_table_to_pandas(
 
 def random_generate_latex_table_string(
     headers: List[Dict[str, Any]],
-    rows_range: Tuple[int, int] = (1, 20),
+    rows_range: Tuple[int, int],
     rng: random.Random = None,
 ) -> str:
     {"name": ["編號", "#"], "type": int, "empty": True, "hashtag": False, "sequence": True}
@@ -662,10 +662,14 @@ def main(
     image_specific_headers: List[str] = [".*圖示.*", ".*(?:加工)?[形型]狀.*"],
     css: str = _default_css,
     count: int = 100,
-    size: Tuple[int, int] = (2535, 3547),
+    new_image_size: Tuple[int, int] = (2480, 3508),
+    min_crop_size: int = None,
+    rows_range: Tuple[int, int] = (1, 20),
     tqdm: bool = True,
     **kwds,
 ):
+    assert input_path is not None or (count is not None and count > 0), "Need pass 'input_path' or 'count'"
+
     rng = random.Random(kwds.get("seed", os.environ.get("SEED", None)))
     full_random_generate = False
 
@@ -699,9 +703,13 @@ def main(
             with filename.open("r", encoding="utf-8") as f:
                 latex_table_str = f.read()
         else:
-            file_image = PILImage.new(mode="RGB", size=size, color=(255, 255, 255))
+            file_image = PILImage.new(mode="RGB", size=new_image_size, color=(255, 255, 255))
             file_image = get_image(src=file_image)
-            latex_table_str = random_generate_latex_table_string(headers=_random_headers[0], rng=rng)
+            latex_table_str = random_generate_latex_table_string(
+                headers=_random_headers[0],
+                rows_range=rows_range,
+                rng=rng,
+            )
             logger.info(f"Run [{index+1}/{len(iter_data)}]") if not tqdm else None
 
         try:
@@ -782,7 +790,7 @@ def main(
                 tables = run_table_detect_camelot(file_image)
                 tables = run_table_detect_img2table(file_image) if not tables else tables
             else:
-                tables = run_random_crop_rectangle(file_image, rng=rng)
+                tables = run_random_crop_rectangle(file_image, min_crop_size=min_crop_size, rng=rng)
             if tables:
                 _ = convert_latex_table_to_pandas(
                     latex_table_str=latex_table_label_str,
