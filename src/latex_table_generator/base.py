@@ -17,9 +17,15 @@ InputType = Union[str, Path, bytes, io.BytesIO, MatLike, PILImage.Image]
 
 def run_random_crop_rectangle(
     src: InputType,
-    min_crop_size: int,
+    min_crop_size: Union[float, int],
     rng: random.Random = None,
 ) -> List[ExtractedTable]:
+    # Pre-process min_crop_size
+    if isinstance(min_crop_size, float):
+        if min_crop_size < 1.0 and min_crop_size > 0.0:
+            min_crop_size = src.shape[0] * src.shape[1] * min_crop_size
+        min_crop_size = int(min_crop_size)
+
     while True:
         x1 = rng.randint(0, src.shape[1] // 6)
         y1 = rng.randint(0, src.shape[0] // 6)

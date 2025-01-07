@@ -663,7 +663,7 @@ def main(
     css: str = _default_css,
     count: int = 100,
     new_image_size: Tuple[int, int] = (2480, 3508),
-    min_crop_size: int = None,
+    min_crop_size: Union[float, int] = None,
     rows_range: Tuple[int, int] = (1, 20),
     tqdm: bool = True,
     **kwds,
