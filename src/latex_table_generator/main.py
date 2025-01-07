@@ -174,7 +174,7 @@ def filling_image_to_cell(
         logger.debug(f"col: {col}, name: {col_name}")
 
         for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
-            if j == col and v:  # 若是是要替換 image 的欄位
+            if j == col:  # 若是是要替換 image 的欄位
                 index = rng.randint(0, len(image_paths) - 1)
                 contents.append(rf"\includegraphics{{{image_paths[index]}}}")
             else:
