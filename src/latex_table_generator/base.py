@@ -20,12 +20,14 @@ def run_random_crop_rectangle(
     min_crop_size: int,
     rng: random.Random = None,
 ) -> List[ExtractedTable]:
-    (x1, y1, x2, y2) = (0, 0, 0, 0)
-    while min_crop_size and (x2 - x1) * (y2 - y1) < min_crop_size:
+    while True:
         x1 = rng.randint(0, src.shape[1] // 6)
         y1 = rng.randint(0, src.shape[0] // 6)
         x2 = rng.randint(src.shape[1] // 6, src.shape[1])
         y2 = rng.randint(src.shape[0] // 6, src.shape[0])
+
+        if min_crop_size is None or (x2 - x1) * (y2 - y1) >= min_crop_size:
+            break
     return [
         ExtractedTable(
             bbox=BBox(x1=x1, y1=y1, x2=x2, y2=y2),
