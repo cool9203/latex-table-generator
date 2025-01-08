@@ -792,7 +792,7 @@ def main(
                     horizontal=horizontal,
                 )
             else:
-                raise ValueError("merge_method should choice from ['random', 'vertical', 'horizontal']")
+                (latex_table_image_str, latex_table_label_str) = (latex_table_str, latex_table_str)
 
             logger.debug(latex_table_image_str)
 
