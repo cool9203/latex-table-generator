@@ -34,7 +34,7 @@ def arg_parser() -> argparse.Namespace:
         "-m",
         "--merge_method",
         type=str,
-        choices=["random", "vertical", "horizontal", "hybrid"],
+        choices=["random", "vertical", "horizontal", "hybrid", ""],
         default="random",
         help="Merge method",
     )
