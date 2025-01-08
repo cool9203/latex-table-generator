@@ -71,6 +71,7 @@ def arg_parser() -> argparse.Namespace:
         help="Full random mode min table area size, support 0~1 to auto get image size percentage",
     )
     parser.add_argument("--rows_range", type=int, nargs="+", default=[1, 20], help="Full random mode table rows count range")
+    parser.add_argument("--format", type=str, choices=["latex", "markdown"], help="Output label format")
     parser.add_argument("--tqdm", action="store_true", help="Use tqdm to show progress bar")
 
     args = parser.parse_args()

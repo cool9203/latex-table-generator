@@ -5,6 +5,7 @@ import os
 import random
 import re
 from decimal import ROUND_DOWN, Decimal
+from io import StringIO
 from os import PathLike
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -144,6 +145,16 @@ def get_subfolder_path(
                 logger.debug(f"get_subfolder_path: Add {folder!s}")
                 find_paths.append(folder)
     return subfolder_paths
+
+
+def convert_latex_table_to_markdown(
+    src: str,
+) -> str:
+    html = pypandoc.convert_text(src, "html", format="latex")
+    with StringIO(html) as f:
+        dfs = pd.read_html(f)
+
+    return dfs[0].to_markdown(index=False).replace("nan", "   ")
 
 
 def preprocess_latex_table_string(
@@ -665,6 +676,7 @@ def main(
     new_image_size: Tuple[int, int] = (2480, 3508),
     min_crop_size: Union[float, int] = None,
     rows_range: Tuple[int, int] = (1, 20),
+    format: str = "latex",
     tqdm: bool = True,
     **kwds,
 ):
@@ -818,7 +830,10 @@ def main(
                     new_latex_table_label_str = re.sub(str(r.group(0)).replace("\\", "\\\\"), label, new_latex_table_label_str)
 
                 with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                    if format == "markdown":
+                        new_latex_table_label_str = convert_latex_table_to_markdown(src=new_latex_table_label_str)
                     f.write(new_latex_table_label_str)
+
             else:
                 logger.info(f"Not detect table, so skip {filename.name}")
         except Exception as e:
