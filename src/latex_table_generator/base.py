@@ -107,14 +107,14 @@ def fix_rotation_image(
 def paste_image_with_table_bbox(
     src: InputType,
     dst: InputType,
-    table: ExtractedTable,
+    position: Tuple[int, int],
     **kwds,
 ) -> MatLike:
     img = get_image(src=src)
 
-    x1 = max(table.bbox.x1, 0)
+    x1 = position[0]
     x2 = x1 + dst.shape[1]
-    y1 = max(table.bbox.y1, 0)
+    y1 = position[1]
     y2 = y1 + dst.shape[0]
     img[y1:y2, x1:x2] = dst
 
