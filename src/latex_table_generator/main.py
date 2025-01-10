@@ -149,12 +149,12 @@ def get_subfolder_path(
 
 def convert_latex_table_to_markdown(
     src: str,
-) -> str:
+) -> List[str]:
     html = pypandoc.convert_text(src, "html", format="latex")
     with StringIO(html) as f:
         dfs = pd.read_html(f)
 
-    return dfs[0].to_markdown(index=False).replace("nan", "   ")
+    return [df.to_markdown(index=False).replace("nan", "   ") for df in dfs]
 
 
 def preprocess_latex_table_string(
@@ -882,7 +882,7 @@ def main(
                         )
                     if format == "markdown":
                         split_token = "\n\n"  # Fix markdown table need 2 newlines
-                        latex_table_label_results[i] = convert_latex_table_to_markdown(src=latex_table_label_results[i])
+                        latex_table_label_results[i] = convert_latex_table_to_markdown(src=latex_table_label_results[i])[0]
 
                 with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
                     f.write(split_token.join(latex_table_label_results))
