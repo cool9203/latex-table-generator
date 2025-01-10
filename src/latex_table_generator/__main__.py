@@ -72,6 +72,7 @@ def arg_parser() -> argparse.Namespace:
     )
     parser.add_argument("--rows_range", type=int, nargs="+", default=[1, 20], help="Full random mode table rows count range")
     parser.add_argument("--format", type=str, choices=["latex", "markdown"], help="Output label format")
+    parser.add_argument("--multi_table", type=int, default=None, help="Multi table number")
     parser.add_argument("--tqdm", action="store_true", help="Use tqdm to show progress bar")
 
     args = parser.parse_args()

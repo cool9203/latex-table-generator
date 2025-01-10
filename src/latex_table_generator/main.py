@@ -97,7 +97,7 @@ _random_headers = [
             "choices": None,
         },
         {
-            "names": ["重量", "重量(kg)", "重量Kg"],
+            "names": ["重量", "重量(kg)", "重量Kg", "重量噸"],
             "type": int,
             "empty": False,
             "hashtag": False,
@@ -595,7 +595,7 @@ def latex_table_to_image(
 
 
 def paste_fit_size_latex_table_to_image(
-    latex_table_str: str,
+    latex_table_strs: List[str],
     file_image: PILImage.Image,
     table: ExtractedTable,
     css: str,
@@ -610,50 +610,126 @@ def paste_fit_size_latex_table_to_image(
     table_height = int(file_image.shape[0] - table.bbox.y1)
 
     final_image = None
-    for padding in sorted(
-        [max_paddings]
-        + [
-            float(Decimal(p).quantize(Decimal(".01"), rounding=ROUND_DOWN))
-            for p in np.arange(max_paddings, 0.0, step if step < 0 else (-1) * step)
-        ],
-        reverse=True,
-    ):
-        image = get_image(
-            src=latex_table_to_image(
-                latex_table_str,
-                width=table_width,
-                css=css,
-                format=format,
-                quality=quality,
-                padding=padding,
+    for index, latex_table_str in enumerate(latex_table_strs):
+        image_width = table_width // len(latex_table_strs)
+        for padding in sorted(
+            [max_paddings]
+            + [
+                float(Decimal(p).quantize(Decimal(".01"), rounding=ROUND_DOWN))
+                for p in np.arange(max_paddings, 0.0, step if step < 0 else (-1) * step)
+            ],
+            reverse=True,
+        ):
+            image = get_image(
+                src=latex_table_to_image(
+                    latex_table_str,
+                    width=image_width,
+                    css=css,
+                    format=format,
+                    quality=str(quality),
+                    padding=padding,
+                )
             )
-        )
-        image = rotate_img_with_border(img=image, angle=skew_angle)
+            image = rotate_img_with_border(img=image, angle=skew_angle)
 
-        if image.shape[1] > table_width:
-            scale = table_width / image.shape[1]
-            image = cv2.resize(
-                src=image,
-                dsize=(
-                    int(image.shape[1] * scale),
-                    int(image.shape[0] * scale),
-                ),
-                interpolation=cv2.INTER_AREA,
-            )
+            if image.shape[1] > image_width:
+                scale = image_width / image.shape[1]
+                image = cv2.resize(
+                    src=image,
+                    dsize=(
+                        int(image.shape[1] * scale),
+                        int(image.shape[0] * scale),
+                    ),
+                    interpolation=cv2.INTER_AREA,
+                )
 
-        if image.shape[0] > table_height:
-            continue
+            if image.shape[0] > table_height:
+                continue
 
-        try:
-            final_image = paste_image_with_table_bbox(
-                src=file_image,
-                dst=image,
-                table=table,
-            )
-            break
-        except ValueError as e:
-            pass
+            try:
+                table_offset_x = table_width * (index / len(latex_table_strs))
+                logger.debug(f"position: {(int(table.bbox.x1 + table_offset_x), int(table.bbox.y1))}")
+                final_image = paste_image_with_table_bbox(
+                    src=final_image if final_image is not None else file_image,
+                    dst=image,
+                    position=(int(table.bbox.x1 + table_offset_x), int(table.bbox.y1)),
+                )
+                break
+            except ValueError as e:
+                ImagePasteError("Can't paste image")
     return final_image
+
+
+def merge_cell(
+    latex_table_str: str,
+    merge_method: str,
+    h_contents: List[str],
+    v_contents: List[str],
+    vh_contents: List[str],
+    specific_headers: List[str],
+    vertical: Union[int, Tuple[int, int]],
+    horizontal: Union[int, Tuple[int, int]],
+    vertical_count: Union[int, Tuple[int, int]],
+    horizontal_count: Union[int, Tuple[int, int]],
+    rng: random.Random = None,
+):
+    if merge_method == "random":
+        _rand_num = rng.randint(0, 2)
+        if _rand_num == 0:
+            (latex_table_image_str, latex_table_label_str) = merge_horizontal_cell(
+                latex_table_str=latex_table_str,
+                rng=rng,
+                contents=h_contents,
+                count=horizontal_count
+                if isinstance(horizontal_count, int)
+                else rng.randint(horizontal_count[0], horizontal_count[1]),
+            )
+        elif _rand_num == 1:
+            (latex_table_image_str, latex_table_label_str) = merge_vertical_cell(
+                latex_table_str=latex_table_str,
+                rng=rng,
+                contents=v_contents,
+                specific_headers=specific_headers,
+                vertical=vertical,
+                count=vertical_count if isinstance(vertical_count, int) else rng.randint(vertical_count[0], vertical_count[1]),
+            )
+        else:
+            (latex_table_image_str, latex_table_label_str) = merge_vertical_and_horizontal_cell(
+                latex_table_str=latex_table_str,
+                rng=rng,
+                contents=vh_contents,
+                vertical=vertical,
+                horizontal=horizontal,
+            )
+    elif merge_method == "vertical":
+        (latex_table_image_str, latex_table_label_str) = merge_vertical_cell(
+            latex_table_str=latex_table_str,
+            rng=rng,
+            contents=v_contents,
+            specific_headers=specific_headers,
+            vertical=vertical,
+            count=vertical_count if isinstance(vertical_count, int) else rng.randint(vertical_count[0], vertical_count[1]),
+        )
+    elif merge_method == "horizontal":
+        (latex_table_image_str, latex_table_label_str) = merge_horizontal_cell(
+            latex_table_str=latex_table_str,
+            rng=rng,
+            contents=h_contents,
+            count=horizontal_count
+            if isinstance(horizontal_count, int)
+            else rng.randint(horizontal_count[0], horizontal_count[1]),
+        )
+    elif merge_method == "hybrid":
+        (latex_table_image_str, latex_table_label_str) = merge_vertical_and_horizontal_cell(
+            latex_table_str=latex_table_str,
+            rng=rng,
+            contents=vh_contents,
+            vertical=vertical,
+            horizontal=horizontal,
+        )
+    else:
+        (latex_table_image_str, latex_table_label_str) = (latex_table_str, latex_table_str)
+    return (latex_table_image_str, latex_table_label_str)
 
 
 def main(
@@ -677,6 +753,7 @@ def main(
     min_crop_size: Union[float, int] = None,
     rows_range: Tuple[int, int] = (1, 20),
     format: str = "latex",
+    multi_table: int = None,
     tqdm: bool = True,
     **kwds,
 ):
@@ -685,6 +762,7 @@ def main(
     rng = random.Random(kwds.get("seed", os.environ.get("SEED", None)))
     full_random_generate = False
 
+    # Create iter_data
     if input_path and Path(input_path).exists():
         iter_data = [d for d in Path(input_path).glob(r"*.txt")]
         iter_data = TQDM.tqdm(iter_data, desc=str(input_path)) if tqdm else iter_data
@@ -699,6 +777,7 @@ def main(
     logger.debug(input_path) if tqdm else logger.info(input_path)
 
     for index, filename in enumerate(iter_data):
+        # Get file_image and latex_table_str
         if not full_random_generate:
             if Path(input_path, f"{filename.stem}.jpg").exists():
                 file_image = PILImage.open(Path(input_path, f"{filename.stem}.jpg"))
@@ -714,104 +793,73 @@ def main(
 
             with filename.open("r", encoding="utf-8") as f:
                 latex_table_str = f.read()
+                latex_table_strs = [latex_table_str for _ in range(multi_table if multi_table else 1)]
         else:
             file_image = PILImage.new(mode="RGB", size=new_image_size, color=(255, 255, 255))
             file_image = get_image(src=file_image)
-            latex_table_str = random_generate_latex_table_string(
-                headers=_random_headers[0],
-                rows_range=rows_range,
-                rng=rng,
-            )
+            latex_table_strs = [
+                random_generate_latex_table_string(
+                    headers=_random_headers[0],
+                    rows_range=rows_range,
+                    rng=rng,
+                )
+                for _ in range(multi_table if multi_table else 1)
+            ]
             logger.info(f"Run [{index+1}/{len(iter_data)}]") if not tqdm else None
+        logger.debug(f"latex_table_strs: {latex_table_strs}")
 
         try:
             # Fill image
-            latex_table_str = filling_image_to_cell(
-                latex_table_str=latex_table_str,
-                rng=rng,
-                image_paths=image_paths,
-                image_specific_headers=image_specific_headers,
-            )
-
-            if merge_method == "random":
-                _rand_num = rng.randint(0, 2)
-                if _rand_num == 0:
-                    latex_table_image_str, latex_table_label_str = merge_horizontal_cell(
-                        latex_table_str=latex_table_str,
-                        rng=rng,
-                        contents=h_contents,
-                        count=horizontal_count
-                        if isinstance(horizontal_count, int)
-                        else rng.randint(horizontal_count[0], horizontal_count[1]),
-                    )
-                elif _rand_num == 1:
-                    latex_table_image_str, latex_table_label_str = merge_vertical_cell(
-                        latex_table_str=latex_table_str,
-                        rng=rng,
-                        contents=v_contents,
-                        specific_headers=specific_headers,
-                        vertical=vertical,
-                        count=vertical_count
-                        if isinstance(vertical_count, int)
-                        else rng.randint(vertical_count[0], vertical_count[1]),
-                    )
-                else:
-                    latex_table_image_str, latex_table_label_str = merge_vertical_and_horizontal_cell(
-                        latex_table_str=latex_table_str,
-                        rng=rng,
-                        contents=vh_contents,
-                        vertical=vertical,
-                        horizontal=horizontal,
-                    )
-            elif merge_method == "vertical":
-                latex_table_image_str, latex_table_label_str = merge_vertical_cell(
+            latex_table_strs = [
+                filling_image_to_cell(
                     latex_table_str=latex_table_str,
                     rng=rng,
-                    contents=v_contents,
+                    image_paths=image_paths,
+                    image_specific_headers=image_specific_headers,
+                )
+                for latex_table_str in latex_table_strs
+            ]
+
+            latex_table_merged_strs = [
+                merge_cell(
+                    latex_table_str=latex_table_str,
+                    merge_method=merge_method,
+                    h_contents=h_contents,
+                    v_contents=v_contents,
+                    vh_contents=vh_contents,
                     specific_headers=specific_headers,
                     vertical=vertical,
-                    count=vertical_count
-                    if isinstance(vertical_count, int)
-                    else rng.randint(vertical_count[0], vertical_count[1]),
-                )
-            elif merge_method == "horizontal":
-                latex_table_image_str, latex_table_label_str = merge_horizontal_cell(
-                    latex_table_str=latex_table_str,
-                    rng=rng,
-                    contents=h_contents,
-                    count=horizontal_count
-                    if isinstance(horizontal_count, int)
-                    else rng.randint(horizontal_count[0], horizontal_count[1]),
-                )
-            elif merge_method == "hybrid":
-                latex_table_image_str, latex_table_label_str = merge_vertical_and_horizontal_cell(
-                    latex_table_str=latex_table_str,
-                    rng=rng,
-                    contents=vh_contents,
-                    vertical=vertical,
                     horizontal=horizontal,
+                    vertical_count=vertical_count,
+                    horizontal_count=horizontal_count,
+                    rng=rng,
                 )
-            else:
-                (latex_table_image_str, latex_table_label_str) = (latex_table_str, latex_table_str)
+                for latex_table_str in latex_table_strs
+            ]
 
-            logger.debug(latex_table_image_str)
+            logger.debug(latex_table_merged_strs)
 
             Path(output_path).mkdir(exist_ok=True, parents=True)
 
+            # Get table position
             if not full_random_generate:
                 tables = run_table_detect_camelot(file_image)
                 tables = run_table_detect_img2table(file_image) if not tables else tables
             else:
                 tables = run_random_crop_rectangle(file_image, min_crop_size=min_crop_size, rng=rng)
+
             if tables:
-                _ = convert_latex_table_to_pandas(
-                    latex_table_str=latex_table_label_str,
-                    headers=True,
-                )
+                [  # Check merged latex table is correct
+                    convert_latex_table_to_pandas(
+                        latex_table_str=latex_table_merged_str[1],
+                        headers=True,
+                    )
+                    for latex_table_merged_str in latex_table_merged_strs
+                ]
                 hollow_image = draw_table_bbox(src=file_image, tables=tables, margin=5)
 
                 final_image = paste_fit_size_latex_table_to_image(
-                    latex_table_str=latex_table_image_str,
+                    latex_table_strs=[latex_table_merged_str[0] for latex_table_merged_str in latex_table_merged_strs],
                     file_image=hollow_image,
                     table=tables[0],
                     css=css,
@@ -822,17 +870,20 @@ def main(
                 plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
 
                 # Convert image to label
-                new_latex_table_label_str = latex_table_label_str
-                for r in re.finditer(_latex_includegraphics_pattern, latex_table_label_str):
-                    path = Path(str(r.group(1)))
-                    with Path(path.parent.resolve(), path.stem + ".txt").open("r", encoding="utf-8") as f:
-                        label = f.read()
-                    new_latex_table_label_str = re.sub(str(r.group(0)).replace("\\", "\\\\"), label, new_latex_table_label_str)
+                latex_table_label_results = [latex_table_merged_str[1] for latex_table_merged_str in latex_table_merged_strs]
+                for i in range(len(latex_table_label_results)):
+                    for r in re.finditer(_latex_includegraphics_pattern, latex_table_label_results[i]):
+                        path = Path(str(r.group(1)))
+                        with Path(path.parent.resolve(), path.stem + ".txt").open("r", encoding="utf-8") as f:
+                            label = f.read()
+                        latex_table_label_results[i] = re.sub(
+                            str(r.group(0)).replace("\\", "\\\\"), label, latex_table_label_results[i]
+                        )
+                    if format == "markdown":
+                        latex_table_label_results[i] = convert_latex_table_to_markdown(src=latex_table_label_results[i])
 
                 with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
-                    if format == "markdown":
-                        new_latex_table_label_str = convert_latex_table_to_markdown(src=new_latex_table_label_str)
-                    f.write(new_latex_table_label_str)
+                    f.write("\n".join(latex_table_label_results))
 
             else:
                 logger.info(f"Not detect table, so skip {filename.name}")
