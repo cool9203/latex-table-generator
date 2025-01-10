@@ -109,7 +109,7 @@ def paste_image_with_table_bbox(
     dst: InputType,
     position: Tuple[int, int],
     **kwds,
-) -> MatLike:
+) -> Tuple[MatLike, Tuple[int, int, int, int]]:
     img = get_image(src=src)
 
     x1 = position[0]
@@ -118,7 +118,7 @@ def paste_image_with_table_bbox(
     y2 = y1 + dst.shape[0]
     img[y1:y2, x1:x2] = dst
 
-    return img
+    return (img, (x1, y1, x2, y2))
 
 
 def draw_table_bbox(
