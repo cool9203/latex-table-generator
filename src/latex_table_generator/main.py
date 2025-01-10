@@ -849,6 +849,7 @@ def main(
                 tables = run_random_crop_rectangle(file_image, min_crop_size=min_crop_size, rng=rng)
 
             if tables:
+                split_token = "\n"
                 [  # Check merged latex table is correct
                     convert_latex_table_to_pandas(
                         latex_table_str=latex_table_merged_str[1],
@@ -880,10 +881,11 @@ def main(
                             str(r.group(0)).replace("\\", "\\\\"), label, latex_table_label_results[i]
                         )
                     if format == "markdown":
+                        split_token = "\n\n"  # Fix markdown table need 2 newlines
                         latex_table_label_results[i] = convert_latex_table_to_markdown(src=latex_table_label_results[i])
 
                 with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
-                    f.write("\n".join(latex_table_label_results))
+                    f.write(split_token.join(latex_table_label_results))
 
             else:
                 logger.info(f"Not detect table, so skip {filename.name}")
