@@ -67,12 +67,12 @@ def arg_parser() -> argparse.Namespace:
 
 def convert_latex_table_to_markdown(
     src: str,
-) -> str:
+) -> List[str]:
     html = pypandoc.convert_text(src, "html", format="latex")
     with StringIO(html) as f:
         dfs = pd.read_html(f)
 
-    return dfs[0].to_markdown(index=False).replace("nan", "   ")
+    return [df.to_markdown(index=False).replace("nan", "   ") for df in dfs]
 
 
 if __name__ == "__main__":
@@ -88,6 +88,6 @@ if __name__ == "__main__":
             filenames = TQDM.tqdm(filenames, leave=False) if args.tqdm else filenames
             for filename in filenames:
                 with Path(filename).open("r", encoding="utf-8") as f:
-                    markdown_table_str = convert_latex_table_to_markdown(f.read())
+                    markdown_table_strs = convert_latex_table_to_markdown(f.read())
                 with Path(args.output, filename.stem + ".txt").open("w", encoding="utf-8") as f:
-                    f.write(markdown_table_str)
+                    f.write("\n\n".join(markdown_table_strs))
