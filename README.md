@@ -3,7 +3,7 @@
 ## Pre-install
 
 ```bash
-sudo apt install wkhtmltopdf
+sudo apt install wkhtmltopdf fonts-noto-cjk
 cd scripts
 bash install-pandoc.sh
 cd ..
