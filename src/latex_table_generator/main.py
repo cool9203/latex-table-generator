@@ -9,7 +9,7 @@ from io import StringIO
 from os import PathLike
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Dict, List, Sequence, Tuple, Union
+from typing import Any, Dict, List, Sequence, Set, Tuple, Union
 from uuid import uuid4
 
 import cv2
@@ -604,12 +604,29 @@ def paste_fit_size_latex_table_to_image(
     quality: Union[str, int] = "100",
     max_paddings: float = 3.0,
     step: float = -0.2,
-) -> PILImage.Image:
+) -> Tuple[PILImage.Image, Tuple[int, int, int, int]]:
+    """_summary_
+
+    Args:
+        latex_table_strs (List[str]): _description_
+        file_image (PILImage.Image): _description_
+        table (ExtractedTable): _description_
+        css (str): _description_
+        skew_angle (float): _description_
+        format (str, optional): _description_. Defaults to "jpeg".
+        quality (Union[str, int], optional): _description_. Defaults to "100".
+        max_paddings (float, optional): _description_. Defaults to 3.0.
+        step (float, optional): _description_. Defaults to -0.2.
+
+    Returns:
+        Tuple[PILImage.Image, Tuple[int, int, int, int]]: (pasted image, table position: (x1, y1, x2, y2))
+    """
     file_image: MatLike = get_image(src=file_image)
     table_width = int(table.bbox.x2 - table.bbox.x1)
     table_height = int(file_image.shape[0] - table.bbox.y1)
 
     final_image = None
+    table_position = None
     for index, latex_table_str in enumerate(latex_table_strs):
         image_width = table_width // len(latex_table_strs)
         for padding in sorted(
@@ -649,7 +666,7 @@ def paste_fit_size_latex_table_to_image(
             try:
                 table_offset_x = table_width * (index / len(latex_table_strs))
                 logger.debug(f"position: {(int(table.bbox.x1 + table_offset_x), int(table.bbox.y1))}")
-                final_image = paste_image_with_table_bbox(
+                (final_image, table_position) = paste_image_with_table_bbox(
                     src=final_image if final_image is not None else file_image,
                     dst=image,
                     position=(int(table.bbox.x1 + table_offset_x), int(table.bbox.y1)),
@@ -657,7 +674,7 @@ def paste_fit_size_latex_table_to_image(
                 break
             except ValueError as e:
                 ImagePasteError("Can't paste image")
-    return final_image
+    return final_image, table_position
 
 
 def merge_cell(
@@ -752,13 +769,14 @@ def main(
     new_image_size: Tuple[int, int] = (2480, 3508),
     min_crop_size: Union[float, int] = None,
     rows_range: Tuple[int, int] = (1, 20),
-    format: str = "latex",
+    format: Set[str] = {"all"},
     multi_table: int = None,
     tqdm: bool = True,
     **kwds,
 ):
     assert input_path is not None or (count is not None and count > 0), "Need pass 'input_path' or 'count'"
 
+    format = set(format) if isinstance(format, (list, tuple)) else format
     rng = random.Random(kwds.get("seed", os.environ.get("SEED", None)))
     full_random_generate = False
 
@@ -775,6 +793,22 @@ def main(
                 iter_data.append(Path(file_id))
         iter_data = TQDM.tqdm(iter_data, desc="Full random generate") if tqdm else iter_data
     logger.debug(input_path) if tqdm else logger.info(input_path)
+
+    # Create output path
+    Path(output_path).mkdir(exist_ok=True, parents=True)
+    if format & {"all"} or len(format) > 1:
+        output_path_images = Path(output_path, "images")
+        output_path_markdown = Path(output_path, "markdown")
+        output_path_latex = Path(output_path, "latex")
+        output_path_table_position = Path(output_path, "table_position")
+        output_path_images.mkdir(exist_ok=True, parents=True)  # Always create image folder
+
+        if "all" in format or "markdown" in format:
+            output_path_markdown.mkdir(exist_ok=True, parents=True)
+        if "all" in format or "latex" in format:
+            output_path_latex.mkdir(exist_ok=True, parents=True)
+        if "all" in format or "table_position" in format:
+            output_path_table_position.mkdir(exist_ok=True, parents=True)
 
     for index, filename in enumerate(iter_data):
         # Get file_image and latex_table_str
@@ -839,8 +873,6 @@ def main(
 
             logger.debug(latex_table_merged_strs)
 
-            Path(output_path).mkdir(exist_ok=True, parents=True)
-
             # Get table position
             if not full_random_generate:
                 tables = run_table_detect_camelot(file_image)
@@ -849,7 +881,6 @@ def main(
                 tables = run_random_crop_rectangle(file_image, min_crop_size=min_crop_size, rng=rng)
 
             if tables:
-                split_token = "\n"
                 [  # Check merged latex table is correct
                     convert_latex_table_to_pandas(
                         latex_table_str=latex_table_merged_str[1],
@@ -859,7 +890,7 @@ def main(
                 ]
                 hollow_image = draw_table_bbox(src=file_image, tables=tables, margin=5)
 
-                final_image = paste_fit_size_latex_table_to_image(
+                (final_image, table_position) = paste_fit_size_latex_table_to_image(
                     latex_table_strs=[latex_table_merged_str[0] for latex_table_merged_str in latex_table_merged_strs],
                     file_image=hollow_image,
                     table=tables[0],
@@ -868,7 +899,6 @@ def main(
                 )
                 if final_image is None:
                     raise ImagePasteError("Can't paste image")
-                plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
 
                 # Convert image to label
                 latex_table_label_results = [latex_table_merged_str[1] for latex_table_merged_str in latex_table_merged_strs]
@@ -880,12 +910,49 @@ def main(
                         latex_table_label_results[i] = re.sub(
                             str(r.group(0)).replace("\\", "\\\\"), label, latex_table_label_results[i]
                         )
-                    if format == "markdown":
-                        split_token = "\n\n"  # Fix markdown table need 2 newlines
-                        latex_table_label_results[i] = convert_latex_table_to_markdown(src=latex_table_label_results[i])[0]
 
-                with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
-                    f.write(split_token.join(latex_table_label_results))
+                # Save label
+                if format & {"markdown", "latex", "table_position"} and len(format) == 1:
+                    plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
+                    with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                        if "markdown" in format:
+                            for i in range(len(latex_table_label_results)):
+                                latex_table_label_results[i] = convert_latex_table_to_markdown(src=latex_table_label_results[i])[
+                                    0
+                                ]
+                            f.write("\n\n".join(latex_table_label_results))
+
+                        elif "latex" in format:
+                            f.write("\n".join(latex_table_label_results))
+
+                        elif "table_position" in format:
+                            f.write(str(list(table_position)))
+                        else:
+                            raise ValueError(f"format value error, got unknown format: {format}")
+                elif format & {"all"} or len(format) > 1:
+                    # Save image
+                    plt.imsave(Path(output_path_images, filename.stem + ".jpg"), final_image)
+
+                    # Save latex
+                    if "all" in format or "latex" in format:
+                        with Path(output_path_latex, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                            f.write("\n".join(latex_table_label_results))
+
+                    # Save markdown
+                    if "all" in format or "markdown" in format:
+                        with Path(output_path_markdown, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                            for i in range(len(latex_table_label_results)):
+                                latex_table_label_results[i] = convert_latex_table_to_markdown(src=latex_table_label_results[i])[
+                                    0
+                                ]
+                            f.write("\n\n".join(latex_table_label_results))
+
+                    # Save table position
+                    if "all" in format or "table_position" in format:
+                        with Path(output_path_table_position, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                            f.write(str(list(table_position)))
+                else:
+                    raise ValueError(f"format value error, got unknown format: {format}")
 
             else:
                 logger.info(f"Not detect table, so skip {filename.name}")
