@@ -1,5 +1,6 @@
 # coding: utf-8
 
+import json
 import logging
 import os
 import random
@@ -605,7 +606,7 @@ def paste_fit_size_latex_table_to_image(
     max_paddings: float = 3.0,
     step: float = -0.2,
     paste_vertical: bool = False,
-) -> Tuple[PILImage.Image, Tuple[int, int, int, int]]:
+) -> Tuple[PILImage.Image, List[Tuple[int, int, int, int]]]:
     """Paste table image to passed image, will auto calc generate image size.
 
     Args:
@@ -621,18 +622,15 @@ def paste_fit_size_latex_table_to_image(
         paste_vertical (bool, optional): paste image is vertical. Defaults to False.
 
     Returns:
-        Tuple[PILImage.Image, Tuple[int, int, int, int]]: (pasted image, table position: (x1, y1, x2, y2))
+        Tuple[PILImage.Image, List[Tuple[int, int, int, int]]]: (pasted image, table position: [(x1, y1, x2, y2)])
     """
     file_image: MatLike = get_image(src=file_image)
     step = step if step < 0 else (-1) * step
-    max_paddings = (
-        max_paddings if not paste_vertical else float(Decimal(max_paddings / 2).quantize(Decimal(".1"), rounding=ROUND_HALF_EVEN))
-    )
     area_width = int(position[2] - position[0])
     area_height = int(file_image.shape[0] - position[1])
 
     final_image = None
-    table_position = None
+    table_positions = list()
     for index, latex_table_str in enumerate(latex_table_strs):
         (image_width, image_height) = (area_width, area_height)
         if paste_vertical:
@@ -683,10 +681,11 @@ def paste_fit_size_latex_table_to_image(
                     dst=image,
                     position=(int(position[0] + area_offset_x), int(position[1] + area_offset_y)),
                 )
+                table_positions.append(table_position)
                 break
             except ValueError as e:
                 raise ImagePasteError("Can't paste image") from e
-    return final_image, table_position
+    return final_image, table_positions
 
 
 def merge_cell(
@@ -912,12 +911,13 @@ def main(
                 ]
                 hollow_image = draw_table_bbox(src=file_image, tables=tables, margin=5)
 
-                (final_image, table_position) = paste_fit_size_latex_table_to_image(
+                _skew_angle = skew_angle if isinstance(skew_angle, (int, float)) else rng.uniform(skew_angle[0], skew_angle[1])
+                (final_image, table_positions) = paste_fit_size_latex_table_to_image(
                     latex_table_strs=[latex_table_merged_str[0] for latex_table_merged_str in latex_table_merged_strs],
                     file_image=hollow_image,
                     position=(tables[0].bbox.x1, tables[0].bbox.y1, tables[0].bbox.x2, tables[0].bbox.y2),
                     css=css,
-                    skew_angle=skew_angle if isinstance(skew_angle, (int, float)) else rng.uniform(skew_angle[0], skew_angle[1]),
+                    skew_angle=_skew_angle,
                     paste_vertical=paste_vertical,
                 )
                 if final_image is None:
@@ -935,6 +935,12 @@ def main(
                         )
 
                 # Save label
+                table_info = json.dumps(
+                    {
+                        "positions": table_positions,
+                        "skew_angle": _skew_angle,
+                    }
+                )
                 if format & {"markdown", "latex", "table_position"} and len(format) == 1:
                     plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
                     with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
@@ -949,7 +955,7 @@ def main(
                             f.write("\n".join(latex_table_label_results))
 
                         elif "table_position" in format:
-                            f.write(str(list(table_position)))
+                            f.write(table_info)
                         else:
                             raise ValueError(f"format value error, got unknown format: {format}")
                 elif format & {"all"} or len(format) > 1:
@@ -973,7 +979,7 @@ def main(
                     # Save table position
                     if "all" in format or "table_position" in format:
                         with Path(output_path_table_position, filename.stem + ".txt").open("w", encoding="utf-8") as f:
-                            f.write(str(list(table_position)))
+                            f.write(table_info)
                 else:
                     raise ValueError(f"format value error, got unknown format: {format}")
 
