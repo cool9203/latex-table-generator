@@ -206,7 +206,7 @@ def preprocess_latex_table_string(
         _row = row
         if row.count(r"\hline") > 1:
             _row = _row.replace(r"\hline", "").strip()
-            _row = f"\hline {_row}"
+            _row = rf"\hline {_row}"
         new_rows.append(_row)
 
     return "\\\\\n".join(new_rows)
@@ -363,7 +363,7 @@ def merge_horizontal_cell(
         texts_str = contents[rng.randint(0, len(contents) - 1)] if contents else texts[rng.randint(0, len(texts) - 1)]
         texts_str_label = "&".join([texts_str for _ in range(len(texts))])
         rows_image[rand_num] = rf"\hline \multicolumn{{{len(texts)}}}{{|c|}}{{{texts_str}}}"
-        rows_label[rand_num] = f"\hline {texts_str_label}"
+        rows_label[rand_num] = rf"\hline {texts_str_label}"
 
     rows_image.append(r"\hline")
     rows_label.append(r"\hline")
