@@ -16,4 +16,5 @@ SEED=99 LOG_LEVEL=INFO \
     --min_crop_size 0.3 \
     --rows_range 1 20 \
     --multi_table 2 \
+    --multi_table_paste_vertical "random" \
     --tqdm

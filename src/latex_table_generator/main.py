@@ -785,6 +785,7 @@ def main(
     rows_range: Tuple[int, int] = (1, 20),
     format: Set[str] = {"all"},
     multi_table: int = None,
+    multi_table_paste_vertical: str = "none",
     tqdm: bool = True,
     **kwds,
 ):
@@ -825,7 +826,12 @@ def main(
             output_path_table_position.mkdir(exist_ok=True, parents=True)
 
     for index, filename in enumerate(iter_data):
-        paste_vertical = rng.randint(0, 1) == 1
+        if multi_table_paste_vertical in ["random"]:
+            paste_vertical = rng.randint(0, 1) == 1
+        elif multi_table_paste_vertical in ["always", "none"]:
+            paste_vertical = multi_table_paste_vertical == "always"
+        else:
+            raise ValueError("multi_table_paste_vertical value error, should be choice from ['random', 'always', 'none']")
 
         # Get file_image and latex_table_str
         if not full_random_generate:

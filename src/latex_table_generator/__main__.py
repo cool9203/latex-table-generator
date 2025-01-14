@@ -80,6 +80,14 @@ def arg_parser() -> argparse.Namespace:
         help="Output label format",
     )
     parser.add_argument("--multi_table", type=int, default=None, help="Multi table number")
+    parser.add_argument(
+        "--multi_table_paste_vertical",
+        type=str,
+        choices=["random", "always", "none"],
+        default="none",
+        help="Multi table pasting vertical",
+    )
+
     parser.add_argument("--tqdm", action="store_true", help="Use tqdm to show progress bar")
 
     args = parser.parse_args()
