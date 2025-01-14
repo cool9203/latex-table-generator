@@ -4,7 +4,7 @@ import logging
 import os
 import random
 import re
-from decimal import ROUND_DOWN, Decimal
+from decimal import ROUND_HALF_EVEN, Decimal
 from io import StringIO
 from os import PathLike
 from pathlib import Path
@@ -597,44 +597,51 @@ def latex_table_to_image(
 def paste_fit_size_latex_table_to_image(
     latex_table_strs: List[str],
     file_image: PILImage.Image,
-    table: ExtractedTable,
+    position: Tuple[int, int, int, int],
     css: str,
     skew_angle: float,
     format: str = "jpeg",
     quality: Union[str, int] = "100",
     max_paddings: float = 3.0,
     step: float = -0.2,
+    paste_vertical: bool = False,
 ) -> Tuple[PILImage.Image, Tuple[int, int, int, int]]:
-    """_summary_
+    """Paste table image to passed image, will auto calc generate image size.
 
     Args:
-        latex_table_strs (List[str]): _description_
-        file_image (PILImage.Image): _description_
-        table (ExtractedTable): _description_
-        css (str): _description_
-        skew_angle (float): _description_
-        format (str, optional): _description_. Defaults to "jpeg".
-        quality (Union[str, int], optional): _description_. Defaults to "100".
-        max_paddings (float, optional): _description_. Defaults to 3.0.
-        step (float, optional): _description_. Defaults to -0.2.
+        latex_table_strs (List[str]): latex table string
+        file_image (PILImage.Image): base image
+        position (Tuple[int, int, int, int]): can paste image area position, (x1, y1, x2, y2)
+        css (str): generate image's css
+        skew_angle (float): generate image skew angle
+        format (str, optional): generate image format. Defaults to "jpeg".
+        quality (Union[str, int], optional): generate image quality. Defaults to "100".
+        max_paddings (float, optional): generate image table cell max padding. Defaults to 3.0.
+        step (float, optional): generate image table cell padding iterate step. like default is [3.0, 2.8, ..., 0.2, 0.0]. Defaults to -0.2.
+        paste_vertical (bool, optional): paste image is vertical. Defaults to False.
 
     Returns:
         Tuple[PILImage.Image, Tuple[int, int, int, int]]: (pasted image, table position: (x1, y1, x2, y2))
     """
     file_image: MatLike = get_image(src=file_image)
-    table_width = int(table.bbox.x2 - table.bbox.x1)
-    table_height = int(file_image.shape[0] - table.bbox.y1)
+    step = step if step < 0 else (-1) * step
+    max_paddings = (
+        max_paddings if not paste_vertical else float(Decimal(max_paddings / 2).quantize(Decimal(".1"), rounding=ROUND_HALF_EVEN))
+    )
+    area_width = int(position[2] - position[0])
+    area_height = int(file_image.shape[0] - position[1])
 
     final_image = None
     table_position = None
     for index, latex_table_str in enumerate(latex_table_strs):
-        image_width = table_width // len(latex_table_strs)
+        (image_width, image_height) = (area_width, area_height)
+        if paste_vertical:
+            image_height = image_height // len(latex_table_strs)
+        else:
+            image_width = image_width // len(latex_table_strs)
         for padding in sorted(
-            [max_paddings]
-            + [
-                float(Decimal(p).quantize(Decimal(".01"), rounding=ROUND_DOWN))
-                for p in np.arange(max_paddings, 0.0, step if step < 0 else (-1) * step)
-            ],
+            [float(Decimal(p).quantize(Decimal(".1"), rounding=ROUND_HALF_EVEN)) for p in np.arange(max_paddings, 0.0, step)]
+            + [0.0],
             reverse=True,
         ):
             image = get_image(
@@ -660,20 +667,25 @@ def paste_fit_size_latex_table_to_image(
                     interpolation=cv2.INTER_AREA,
                 )
 
-            if image.shape[0] > table_height:
+            if image.shape[0] > image_height:
                 continue
 
             try:
-                table_offset_x = table_width * (index / len(latex_table_strs))
-                logger.debug(f"position: {(int(table.bbox.x1 + table_offset_x), int(table.bbox.y1))}")
+                if paste_vertical:
+                    (area_offset_x, area_offset_y) = (0, area_height * (index / len(latex_table_strs)))
+                else:
+                    (area_offset_x, area_offset_y) = (area_width * (index / len(latex_table_strs)), 0)
+                logger.debug(f"position: {(int(position[0] + area_offset_x), int(position[1] + area_offset_y))}")
+                logger.debug(f"image.shape: {image.shape}")
+                logger.debug(f"area.shape: ({area_height}, {area_width})")
                 (final_image, table_position) = paste_image_with_table_bbox(
                     src=final_image if final_image is not None else file_image,
                     dst=image,
-                    position=(int(table.bbox.x1 + table_offset_x), int(table.bbox.y1)),
+                    position=(int(position[0] + area_offset_x), int(position[1] + area_offset_y)),
                 )
                 break
             except ValueError as e:
-                ImagePasteError("Can't paste image")
+                raise ImagePasteError("Can't paste image") from e
     return final_image, table_position
 
 
@@ -691,7 +703,7 @@ def merge_cell(
     rng: random.Random = None,
 ):
     if merge_method == "random":
-        _rand_num = rng.randint(0, 2)
+        _rand_num = rng.randint(0, 3)
         if _rand_num == 0:
             (latex_table_image_str, latex_table_label_str) = merge_horizontal_cell(
                 latex_table_str=latex_table_str,
@@ -710,7 +722,7 @@ def merge_cell(
                 vertical=vertical,
                 count=vertical_count if isinstance(vertical_count, int) else rng.randint(vertical_count[0], vertical_count[1]),
             )
-        else:
+        elif _rand_num == 2:
             (latex_table_image_str, latex_table_label_str) = merge_vertical_and_horizontal_cell(
                 latex_table_str=latex_table_str,
                 rng=rng,
@@ -718,6 +730,8 @@ def merge_cell(
                 vertical=vertical,
                 horizontal=horizontal,
             )
+        else:
+            (latex_table_image_str, latex_table_label_str) = (latex_table_str, latex_table_str)
     elif merge_method == "vertical":
         (latex_table_image_str, latex_table_label_str) = merge_vertical_cell(
             latex_table_str=latex_table_str,
@@ -811,6 +825,8 @@ def main(
             output_path_table_position.mkdir(exist_ok=True, parents=True)
 
     for index, filename in enumerate(iter_data):
+        paste_vertical = rng.randint(0, 1) == 1
+
         # Get file_image and latex_table_str
         if not full_random_generate:
             if Path(input_path, f"{filename.stem}.jpg").exists():
@@ -893,9 +909,10 @@ def main(
                 (final_image, table_position) = paste_fit_size_latex_table_to_image(
                     latex_table_strs=[latex_table_merged_str[0] for latex_table_merged_str in latex_table_merged_strs],
                     file_image=hollow_image,
-                    table=tables[0],
+                    position=(tables[0].bbox.x1, tables[0].bbox.y1, tables[0].bbox.x2, tables[0].bbox.y2),
                     css=css,
                     skew_angle=skew_angle if isinstance(skew_angle, (int, float)) else rng.uniform(skew_angle[0], skew_angle[1]),
+                    paste_vertical=paste_vertical,
                 )
                 if final_image is None:
                     raise ImagePasteError("Can't paste image")
