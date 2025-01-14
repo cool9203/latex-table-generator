@@ -17,4 +17,5 @@ SEED=99 LOG_LEVEL=INFO \
     --rows_range 1 20 \
     --multi_table 2 \
     --multi_table_paste_vertical "random" \
+    --merge_methods "horizontal" "vertical" "hybrid" "none" \
     --tqdm

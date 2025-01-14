@@ -32,11 +32,12 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("-c", "--count", type=int, default=None, help="Full random generate latex table")
     parser.add_argument(
         "-m",
-        "--merge_method",
+        "--merge_methods",
         type=str,
-        choices=["random", "vertical", "horizontal", "hybrid", ""],
-        default="random",
-        help="Merge method",
+        nargs="+",
+        choices=["vertical", "horizontal", "hybrid", "none"],
+        default=["vertical", "horizontal", "hybrid", "none"],
+        help="Merge methods",
     )
     parser.add_argument(
         "-vc", "--v_contents", type=str, nargs="+", default=[], help="Merged vertical cell content, will random choice"
@@ -75,7 +76,7 @@ def arg_parser() -> argparse.Namespace:
         "--format",
         type=str,
         nargs="+",
-        choices=["latex", "markdown", "table-position", "all"],
+        choices=["latex", "markdown", "table_info", "all"],
         default=["all"],
         help="Output label format",
     )

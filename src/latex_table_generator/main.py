@@ -32,7 +32,6 @@ from latex_table_generator.base import (
     rotate_img_with_border,
     run_random_crop_rectangle,
 )
-from latex_table_generator.camelot_base import ExtractedTable
 from latex_table_generator.camelot_base import run_table_detect as run_table_detect_camelot
 from latex_table_generator.errors import (
     ImagePasteError,
@@ -42,6 +41,7 @@ from latex_table_generator.errors import (
 )
 from latex_table_generator.image2table import run_table_detect as run_table_detect_img2table
 
+_support_merge_methods = ["horizontal", "vertical", "hybrid", "none"]
 _latex_includegraphics_pattern = r"\\includegraphics{(.*.(?:jpg|png|JPG|PNG))}"
 _latex_table_begin_pattern = r"\\begin{tabular}{.*}"
 _latex_table_end_pattern = r"\\end{tabular}"
@@ -690,7 +690,7 @@ def paste_fit_size_latex_table_to_image(
 
 def merge_cell(
     latex_table_str: str,
-    merge_method: str,
+    merge_methods: Union[Set[str], Sequence[str]],
     h_contents: List[str],
     v_contents: List[str],
     vh_contents: List[str],
@@ -701,37 +701,19 @@ def merge_cell(
     horizontal_count: Union[int, Tuple[int, int]],
     rng: random.Random = None,
 ):
-    if merge_method == "random":
-        _rand_num = rng.randint(0, 3)
-        if _rand_num == 0:
-            (latex_table_image_str, latex_table_label_str) = merge_horizontal_cell(
-                latex_table_str=latex_table_str,
-                rng=rng,
-                contents=h_contents,
-                count=horizontal_count
-                if isinstance(horizontal_count, int)
-                else rng.randint(horizontal_count[0], horizontal_count[1]),
-            )
-        elif _rand_num == 1:
-            (latex_table_image_str, latex_table_label_str) = merge_vertical_cell(
-                latex_table_str=latex_table_str,
-                rng=rng,
-                contents=v_contents,
-                specific_headers=specific_headers,
-                vertical=vertical,
-                count=vertical_count if isinstance(vertical_count, int) else rng.randint(vertical_count[0], vertical_count[1]),
-            )
-        elif _rand_num == 2:
-            (latex_table_image_str, latex_table_label_str) = merge_vertical_and_horizontal_cell(
-                latex_table_str=latex_table_str,
-                rng=rng,
-                contents=vh_contents,
-                vertical=vertical,
-                horizontal=horizontal,
-            )
-        else:
-            (latex_table_image_str, latex_table_label_str) = (latex_table_str, latex_table_str)
-    elif merge_method == "vertical":
+    __error = ValueError(f"merge_methods have not support method, should be choice from {_support_merge_methods}")
+    for _merge_method in merge_methods:
+        if _merge_method not in _support_merge_methods:
+            raise __error
+
+    if len(merge_methods) > 1:
+        merge_method = merge_methods[rng.randint(0, len(merge_methods) - 1)]
+    elif len(merge_methods) == 1:
+        merge_method = merge_methods[0]
+    else:
+        raise __error
+
+    if merge_method == "vertical":
         (latex_table_image_str, latex_table_label_str) = merge_vertical_cell(
             latex_table_str=latex_table_str,
             rng=rng,
@@ -765,7 +747,7 @@ def merge_cell(
 def main(
     output_path: PathLike,
     input_path: PathLike = None,
-    merge_method: str = "random",
+    merge_methods: Union[Sequence[str], Set[str]] = {"horizontal", "vertical", "hybrid", "none"},
     h_contents: List[str] = ["開口補強"],
     v_contents: List[str] = ["彎鉤", "鋼材筋"],
     vh_contents: List[str] = ["開口補強", "鋼材筋"],
@@ -814,15 +796,15 @@ def main(
         output_path_images = Path(output_path, "images")
         output_path_markdown = Path(output_path, "markdown")
         output_path_latex = Path(output_path, "latex")
-        output_path_table_position = Path(output_path, "table_position")
+        output_path_table_info = Path(output_path, "table_info")
         output_path_images.mkdir(exist_ok=True, parents=True)  # Always create image folder
 
         if "all" in format or "markdown" in format:
             output_path_markdown.mkdir(exist_ok=True, parents=True)
         if "all" in format or "latex" in format:
             output_path_latex.mkdir(exist_ok=True, parents=True)
-        if "all" in format or "table_position" in format:
-            output_path_table_position.mkdir(exist_ok=True, parents=True)
+        if "all" in format or "table_info" in format:
+            output_path_table_info.mkdir(exist_ok=True, parents=True)
 
     for index, filename in enumerate(iter_data):
         if multi_table_paste_vertical in ["random"]:
@@ -878,7 +860,7 @@ def main(
             latex_table_merged_strs = [
                 merge_cell(
                     latex_table_str=latex_table_str,
-                    merge_method=merge_method,
+                    merge_methods=merge_methods,
                     h_contents=h_contents,
                     v_contents=v_contents,
                     vh_contents=vh_contents,
@@ -941,7 +923,7 @@ def main(
                         "skew_angle": _skew_angle,
                     }
                 )
-                if format & {"markdown", "latex", "table_position"} and len(format) == 1:
+                if format & {"markdown", "latex", "table_info"} and len(format) == 1:
                     plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
                     with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
                         if "markdown" in format:
@@ -954,7 +936,7 @@ def main(
                         elif "latex" in format:
                             f.write("\n".join(latex_table_label_results))
 
-                        elif "table_position" in format:
+                        elif "table_info" in format:
                             f.write(table_info)
                         else:
                             raise ValueError(f"format value error, got unknown format: {format}")
@@ -977,8 +959,8 @@ def main(
                             f.write("\n\n".join(latex_table_label_results))
 
                     # Save table position
-                    if "all" in format or "table_position" in format:
-                        with Path(output_path_table_position, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                    if "all" in format or "table_info" in format:
+                        with Path(output_path_table_info, filename.stem + ".txt").open("w", encoding="utf-8") as f:
                             f.write(table_info)
                 else:
                     raise ValueError(f"format value error, got unknown format: {format}")

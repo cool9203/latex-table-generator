@@ -15,4 +15,5 @@ SEED=99 LOG_LEVEL=INFO \
     --new_image_size 2480 3508 \
     --min_crop_size 0.3 \
     --rows_range 1 20 \
+    --merge_methods "horizontal" "vertical" "hybrid" \
     --tqdm
