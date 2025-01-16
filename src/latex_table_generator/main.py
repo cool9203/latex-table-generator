@@ -20,6 +20,7 @@ import pandas as pd
 import pypandoc
 import tqdm as TQDM
 from matplotlib import pyplot as plt
+from packaging.version import Version
 from PIL import Image as PILImage
 
 from latex_table_generator.base import (
@@ -147,6 +148,12 @@ _random_headers = [
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
+
+# Check pypandoc version
+if Version(pypandoc.get_pandoc_version()) < Version("3.1.2"):
+    raise RuntimeError(
+        "pandoc version need >= 3.1.2, please run `ARCH=x86_64 bash scripts/install-pandoc.sh && source ~/.bashrc`"
+    )
 
 
 def get_subfolder_path(
@@ -792,7 +799,7 @@ def main(
     horizontal_count: Union[int, Tuple[int, int]] = [1, 3],
     skew_angle: Union[int, Tuple[int, int]] = [-5, 5],
     image_paths: List[str] = None,
-    image_specific_headers: List[str] = [".*圖示.*", ".*(?:加工)?[形型]狀.*"],
+    image_specific_headers: List[str] = [".*圖示.*", ".*(?:加工)?[形型][狀式].*"],
     css: str = _default_css,
     count: int = 100,
     new_image_size: Tuple[int, int] = (2480, 3508),
