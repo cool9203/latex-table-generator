@@ -837,6 +837,7 @@ def main(
         output_path_images = Path(output_path, "images")
         output_path_markdown = Path(output_path, "markdown")
         output_path_latex = Path(output_path, "latex")
+        output_path_html = Path(output_path, "html")
         output_path_table_info = Path(output_path, "table_info")
         output_path_images.mkdir(exist_ok=True, parents=True)  # Always create image folder
 
@@ -844,6 +845,8 @@ def main(
             output_path_markdown.mkdir(exist_ok=True, parents=True)
         if "all" in format or "latex" in format:
             output_path_latex.mkdir(exist_ok=True, parents=True)
+        if "all" in format or "html" in format:
+            output_path_html.mkdir(exist_ok=True, parents=True)
         if "all" in format or "table_info" in format:
             output_path_table_info.mkdir(exist_ok=True, parents=True)
 
@@ -968,14 +971,19 @@ def main(
                     plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
                     with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
                         if "markdown" in format:
+                            markdown_tables = list()
                             for i in range(len(latex_table_label_results)):
-                                latex_table_label_results[i] = convert_latex_table_to_markdown(src=latex_table_label_results[i])[
-                                    0
-                                ]
-                            f.write("\n\n".join(latex_table_label_results))
+                                markdown_tables.append(convert_latex_table_to_markdown(src=latex_table_label_results[i])[0])
+                            f.write("\n\n".join(markdown_tables))
 
                         elif "latex" in format:
                             f.write("\n".join(latex_table_label_results))
+
+                        elif "html" in format:
+                            html_tables = list()
+                            for i in range(len(latex_table_label_results)):
+                                html_tables.append(pypandoc.convert_text(latex_table_label_results[i], "html", format="latex"))
+                            f.write("\n".join(html_tables))
 
                         elif "table_info" in format:
                             f.write(table_info)
@@ -993,11 +1001,18 @@ def main(
                     # Save markdown
                     if "all" in format or "markdown" in format:
                         with Path(output_path_markdown, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                            markdown_tables = list()
                             for i in range(len(latex_table_label_results)):
-                                latex_table_label_results[i] = convert_latex_table_to_markdown(src=latex_table_label_results[i])[
-                                    0
-                                ]
-                            f.write("\n\n".join(latex_table_label_results))
+                                markdown_tables.append(convert_latex_table_to_markdown(src=latex_table_label_results[i])[0])
+                            f.write("\n\n".join(markdown_tables))
+
+                    # Save html
+                    if "all" in format or "html" in format:
+                        with Path(output_path_html, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                            html_tables = list()
+                            for i in range(len(latex_table_label_results)):
+                                html_tables.append(pypandoc.convert_text(latex_table_label_results[i], "html", format="latex"))
+                            f.write("\n".join(html_tables))
 
                     # Save table position
                     if "all" in format or "table_info" in format:

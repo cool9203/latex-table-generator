@@ -76,7 +76,7 @@ def arg_parser() -> argparse.Namespace:
         "--format",
         type=str,
         nargs="+",
-        choices=["latex", "markdown", "table_info", "all"],
+        choices=["latex", "markdown", "html", "table_info", "all"],
         default=["all"],
         help="Output label format",
     )
@@ -103,6 +103,7 @@ if __name__ == "__main__":
         "seed",
         "h_contents",
         "v_contents",
+        "vh_contents",
         "specific_headers",
     ]
     range_arguments = [
