@@ -105,7 +105,7 @@ _random_headers = [
         },
         {"names": ["號數"], "type": int, "empty": False, "hashtag": True, "sequence": False, "range": (1, 20), "choices": None},
         {
-            "names": ["圖示", "加工形狀", "加工型狀", "形狀", "型狀"],
+            "names": ["圖示", "加工形狀", "加工型狀", "加工形式", "加工型式", "形狀", "型狀", "形式", "型式"],
             "type": str,
             "empty": False,
             "hashtag": False,
