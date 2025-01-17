@@ -328,8 +328,10 @@ def filling_image_to_cell(
         col, col_name = col_names[0]
         logger.debug(f"col: {col}, name: {col_name}")
 
+        is_space_row = sum([1 if v else 0 for v in table.iloc[i]]) == 0
+
         for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
-            if j == col:  # 若是是要替換 image 的欄位
+            if j == col and not is_space_row:  # 若是是要替換 image 的欄位
                 index = rng.randint(0, len(image_paths) - 1)
                 contents.append(rf"\includegraphics{{{image_paths[index]}}}")
             else:
