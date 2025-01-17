@@ -855,7 +855,7 @@ def main(
     multi_table: int = None,
     multi_table_paste_vertical: str = "none",
     html_label_cell_merge: bool = False,
-    add_space_row_percentage: float = 0.1,
+    add_space_row_percentage: float = 0.3,
     dropout_percentage: float = None,
     tqdm: bool = True,
     **kwds,
