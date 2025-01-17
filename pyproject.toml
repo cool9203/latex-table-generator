@@ -1,9 +1,15 @@
+[build-system]
+requires      = ["hatchling"]
+build-backend = "hatchling.build"
+
+
 [project]
-name            = "latex-table-generator"
-description     = "Auto generator latex to table image"
-readme          = "README.md"
+name = "latex-table-generator"
+description = "Auto generator latex to table image"
+readme = "README.md"
 requires-python = ">=3.10"
-dependencies    = [
+dynamic = ["version"]
+dependencies = [
     "camelot-py[base]==0.9.0",
     "img2table>=1.4.0",
     "imgkit>=1.2.3",
@@ -15,7 +21,7 @@ dependencies    = [
     "pypandoc>=1.14",
     "tqdm>=4.67.1",
 ]
-dynamic         = ["version"]
+
 
 [tool]
     [tool.ruff]
