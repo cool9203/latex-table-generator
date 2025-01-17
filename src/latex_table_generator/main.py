@@ -1013,6 +1013,14 @@ def main(
                 # Convert image to label
                 latex_table_image_results = [latex_table_merged_str[0] for latex_table_merged_str in latex_table_merged_strs]
                 latex_table_label_results = [latex_table_merged_str[1] for latex_table_merged_str in latex_table_merged_strs]
+                for i in range(len(latex_table_image_results)):
+                    for r in re.finditer(_latex_includegraphics_pattern, latex_table_image_results[i]):
+                        path = Path(str(r.group(1)))
+                        with Path(path.parent.resolve(), path.stem + ".txt").open("r", encoding="utf-8") as f:
+                            label = f.read()
+                        latex_table_image_results[i] = re.sub(
+                            str(r.group(0)).replace("\\", "\\\\"), label, latex_table_image_results[i]
+                        )
                 for i in range(len(latex_table_label_results)):
                     for r in re.finditer(_latex_includegraphics_pattern, latex_table_label_results[i]):
                         path = Path(str(r.group(1)))
