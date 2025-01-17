@@ -148,7 +148,6 @@ _random_headers = [
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
-logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 # Check pypandoc version
 if Version(pypandoc.get_pandoc_version()) < Version("3.1.2"):
@@ -865,6 +864,7 @@ def main(
 
     format = set(format) if isinstance(format, (list, tuple)) else format
     rng = random.Random(kwds.get("seed", os.environ.get("SEED", None)))
+    logger.setLevel(kwds.get("log_level", os.environ.get("LOG_LEVEL", "INFO")))
     full_random_generate = False
 
     # Create iter_data
