@@ -470,8 +470,8 @@ wheels = [
 
 [[package]]
 name = "latex-table-generator"
-version = "0.0.0"
-source = { virtual = "." }
+version = "0.2.5"
+source = { editable = "." }
 dependencies = [
     { name = "camelot-py" },
     { name = "img2table" },
