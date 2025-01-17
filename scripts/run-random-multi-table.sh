@@ -15,6 +15,8 @@ SEED=99 LOG_LEVEL=INFO \
     --new_image_size 2480 3508 \
     --min_crop_size 0.3 \
     --rows_range 1 20 \
+    --add_space_row_percentage 0.3 \
+    --dropout_percentage 0.3 \
     --multi_table 2 \
     --multi_table_paste_vertical "random" \
     --merge_methods "horizontal" "vertical" "hybrid" "none" \

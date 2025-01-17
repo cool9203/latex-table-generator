@@ -17,5 +17,7 @@ SEED=99 LOG_LEVEL=INFO \
     --horizontal_count 1 3 \
     --vertical_count 1 3 \
     --skew_angle -3 3 \
+    --add_space_row_percentage 0.3 \
+    --dropout_percentage 0.3 \
     --merge_methods "none" \
     --tqdm
