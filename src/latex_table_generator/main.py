@@ -38,6 +38,7 @@ from latex_table_generator.errors import (
     NotColumnMatchError,
     NotLatexError,
     NotSupportMulticolumnLatexError,
+    NotSupportMulticolumnLatexTableError,
 )
 from latex_table_generator.image2table import run_table_detect as run_table_detect_img2table
 
@@ -212,6 +213,22 @@ def preprocess_latex_table_string(
     return "\\\\\n".join(new_rows)
 
 
+def pre_check_latex_table_string(
+    latex_table_str: str,
+) -> Tuple[str, str]:
+    results = re.findall(_latex_table_begin_pattern, latex_table_str)
+    if not results:
+        raise NotLatexError("Not latex table")
+    elif "multicolumn" in latex_table_str:
+        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
+    elif len(results) > 1:
+        raise NotSupportMulticolumnLatexTableError("Not support convert have latex table")
+
+    begin_str = results[0]
+    end_str = r"\end{tabular}"
+    return (begin_str, end_str)
+
+
 def convert_latex_table_to_pandas(
     latex_table_str: str,
     headers: Union[bool, Sequence[str], None] = None,
@@ -293,14 +310,7 @@ def filling_image_to_cell(
     rng: random.Random = None,
 ) -> str:
     logger.debug("Run filling_image_to_cell")
-    result = re.findall(_latex_table_begin_pattern, latex_table_str)
-    if not result:
-        raise NotLatexError("Not latex table")
-    elif "multicolumn" in latex_table_str:
-        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
-
-    begin_str = result[0]
-    end_str = r"\end{tabular}"
+    (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
 
     table = convert_latex_table_to_pandas(latex_table_str, headers=True)
     rows = [r"\hline " + " & ".join([str(c) for c in table.columns])]
@@ -342,14 +352,7 @@ def merge_horizontal_cell(
 ) -> Tuple[str, str]:
     # TODO: 支援可以少數欄水平合併
     logger.debug("Run merge_horizontal_cell")
-    result = re.findall(_latex_table_begin_pattern, latex_table_str)
-    if not result:
-        raise NotLatexError("Not latex table")
-    elif "multicolumn" in latex_table_str:
-        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
-
-    begin_str = result[0]
-    end_str = r"\end{tabular}"
+    (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
     processed_latex_table_str = preprocess_latex_table_string(latex_table_str)
 
     rows_image = [s.strip() for s in processed_latex_table_str.split(r"\\") if s.strip() and "&" in s]
@@ -385,13 +388,7 @@ def merge_vertical_cell(
     **kwds,
 ) -> Tuple[str, str]:
     logger.debug("Run merge_vertical_cell")
-    result = re.findall(_latex_table_begin_pattern, latex_table_str)
-    if not result:
-        raise NotLatexError("Not latex table")
-    elif "multicolumn" in latex_table_str:
-        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
-
-    begin_str = result[0]
+    (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
     end_str = r"\end{tabular}"
 
     table = convert_latex_table_to_pandas(latex_table_str, headers=True)
@@ -496,13 +493,7 @@ def merge_vertical_and_horizontal_cell(
     **kwds,
 ) -> Tuple[str, str]:
     logger.debug("Run merge_vertical_and_horizontal_cell")
-    result = re.findall(_latex_table_begin_pattern, latex_table_str)
-    if not result:
-        raise NotLatexError("Not latex table")
-    elif "multicolumn" in latex_table_str:
-        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
-
-    begin_str = result[0]
+    (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
     end_str = r"\end{tabular}"
 
     table = convert_latex_table_to_pandas(latex_table_str, headers=True)
