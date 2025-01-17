@@ -69,7 +69,7 @@ _default_css = r"""<style>
 </style>"""
 _random_headers = [
     [
-        {"names": ["編號", "#"], "type": int, "empty": True, "hashtag": False, "sequence": True, "range": None, "choices": None},
+        {"names": ["編號", "#"], "type": int, "empty": False, "hashtag": False, "sequence": True, "range": None, "choices": None},
         {
             "names": ["部位"],
             "type": str,
@@ -306,6 +306,55 @@ def random_generate_latex_table_string(
     latex_table_str += "\\\\\n".join(rows)
     latex_table_str += "\\hline\n\\end{tabular}"
     return latex_table_str
+
+
+def dropout_table_content(
+    latex_table_str: str,
+    dropout_percentage: float,
+    rng: random.Random = None,
+) -> str:
+    """Dropout cell content
+
+    Args:
+        latex_table_str (str): latex table string
+        dropout_table_content (float, optional): Dropout table content percentage.
+        rng (random.Random, optional): random generator. Defaults to None.
+
+    Returns:
+        str: Dropped content latex table string
+    """
+    logger.debug("Run dropout_cell_content")
+
+    if dropout_percentage <= 0.0:
+        return latex_table_str
+
+    (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
+    table = convert_latex_table_to_pandas(latex_table_str, headers=True)
+
+    # Get dropout indexes
+    dropout_indexes = list()
+    for i in range(len(table)):
+        for j, v in enumerate(table.iloc[i]):
+            dropout_indexes.append((i, j))
+    rng.shuffle(dropout_indexes)
+    dropout_indexes = dropout_indexes[: int(len(dropout_indexes) * dropout_percentage)]
+
+    # Start drop cell content
+    rows = [r"\hline " + " & ".join([str(c) for c in table.columns])]
+    for i in range(len(table)):
+        contents = list()
+
+        for j, v in enumerate(table.iloc[i]):
+            if (i, j) in dropout_indexes:
+                contents.append("")
+            else:
+                contents.append(v)
+        contents_str = " & ".join(contents)
+        rows.append(rf"\hline {contents_str}" if r"\cline" not in contents_str else contents_str)
+
+    rows.append(r"\hline")
+    final_latex_table_image_str = " \\\\\n".join(rows)
+    return f"{begin_str}\n{final_latex_table_image_str}\n{end_str}"
 
 
 def filling_image_to_cell(
@@ -800,6 +849,7 @@ def main(
     multi_table: int = None,
     multi_table_paste_vertical: str = "none",
     add_space_row_percentage: float = 0.1,
+    dropout_percentage: float = None,
     tqdm: bool = True,
     **kwds,
 ):
@@ -887,6 +937,16 @@ def main(
                     rng=rng,
                     image_paths=image_paths,
                     image_specific_headers=image_specific_headers,
+                )
+                for latex_table_str in latex_table_strs
+            ]
+
+            # Dropout table cell content
+            latex_table_strs = [
+                dropout_table_content(
+                    latex_table_str=latex_table_str,
+                    rng=rng,
+                    dropout_percentage=dropout_percentage,
                 )
                 for latex_table_str in latex_table_strs
             ]

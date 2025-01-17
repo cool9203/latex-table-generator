@@ -94,6 +94,12 @@ def arg_parser() -> argparse.Namespace:
         default=0.3,
         help="Full random mode add space row percentage",
     )
+    parser.add_argument(
+        "--dropout_percentage",
+        type=float,
+        default=None,
+        help="Dropout table content percentage",
+    )
 
     parser.add_argument("--tqdm", action="store_true", help="Use tqdm to show progress bar")
 
