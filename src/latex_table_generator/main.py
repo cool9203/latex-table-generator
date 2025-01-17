@@ -808,6 +808,7 @@ def main(
     format: Set[str] = {"all"},
     multi_table: int = None,
     multi_table_paste_vertical: str = "none",
+    html_label_cell_merge: bool = False,
     tqdm: bool = True,
     **kwds,
 ):
@@ -950,6 +951,7 @@ def main(
                     raise ImagePasteError("Can't paste image")
 
                 # Convert image to label
+                latex_table_image_results = [latex_table_merged_str[0] for latex_table_merged_str in latex_table_merged_strs]
                 latex_table_label_results = [latex_table_merged_str[1] for latex_table_merged_str in latex_table_merged_strs]
                 for i in range(len(latex_table_label_results)):
                     for r in re.finditer(_latex_includegraphics_pattern, latex_table_label_results[i]):
@@ -972,8 +974,8 @@ def main(
                     with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
                         if "markdown" in format:
                             markdown_tables = list()
-                            for i in range(len(latex_table_label_results)):
-                                markdown_tables.append(convert_latex_table_to_markdown(src=latex_table_label_results[i])[0])
+                            for latex_table_result in latex_table_label_results:
+                                markdown_tables.append(convert_latex_table_to_markdown(src=latex_table_result)[0])
                             f.write("\n\n".join(markdown_tables))
 
                         elif "latex" in format:
@@ -981,8 +983,10 @@ def main(
 
                         elif "html" in format:
                             html_tables = list()
-                            for i in range(len(latex_table_label_results)):
-                                html_tables.append(pypandoc.convert_text(latex_table_label_results[i], "html", format="latex"))
+                            for latex_table_result in (
+                                latex_table_image_results if html_label_cell_merge else latex_table_label_results
+                            ):
+                                html_tables.append(pypandoc.convert_text(latex_table_result, "html", format="latex"))
                             f.write("\n".join(html_tables))
 
                         elif "table_info" in format:
@@ -1002,16 +1006,18 @@ def main(
                     if "all" in format or "markdown" in format:
                         with Path(output_path_markdown, filename.stem + ".txt").open("w", encoding="utf-8") as f:
                             markdown_tables = list()
-                            for i in range(len(latex_table_label_results)):
-                                markdown_tables.append(convert_latex_table_to_markdown(src=latex_table_label_results[i])[0])
+                            for latex_table_result in latex_table_label_results:
+                                markdown_tables.append(convert_latex_table_to_markdown(src=latex_table_result)[0])
                             f.write("\n\n".join(markdown_tables))
 
                     # Save html
                     if "all" in format or "html" in format:
                         with Path(output_path_html, filename.stem + ".txt").open("w", encoding="utf-8") as f:
                             html_tables = list()
-                            for i in range(len(latex_table_label_results)):
-                                html_tables.append(pypandoc.convert_text(latex_table_label_results[i], "html", format="latex"))
+                            for latex_table_result in (
+                                latex_table_image_results if html_label_cell_merge else latex_table_label_results
+                            ):
+                                html_tables.append(pypandoc.convert_text(latex_table_result, "html", format="latex"))
                             f.write("\n".join(html_tables))
 
                     # Save table position

@@ -88,6 +88,7 @@ def arg_parser() -> argparse.Namespace:
         default="none",
         help="Multi table pasting vertical",
     )
+    parser.add_argument("--html_label_cell_merge", action="store_true", help="Html label will output merge cell format")
 
     parser.add_argument("--tqdm", action="store_true", help="Use tqdm to show progress bar")
 

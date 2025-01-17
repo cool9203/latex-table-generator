@@ -16,4 +16,5 @@ SEED=99 LOG_LEVEL=INFO \
     --min_crop_size 0.3 \
     --rows_range 1 20 \
     --merge_methods "horizontal" "vertical" "hybrid" \
+    --html_label_cell_merge \
     --tqdm
