@@ -56,6 +56,7 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("-s", "--seed", type=str, default=None, help="Random seed")
     parser.add_argument("--log_level", type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR"], default=None, help="Log level")
     parser.add_argument("--specific_headers", type=str, nargs="+", default=[], help="Choice column name to merge")
+    parser.add_argument("--image_specific_headers", type=str, nargs="+", default=[], help="Choice column name to merge")
     parser.add_argument("--vertical", type=str, nargs="+", default=[], help="Vertical length can be range")
     parser.add_argument("--image_paths", type=str, nargs="+", default=[], help="Paste to table cell image data path")
     parser.add_argument(
@@ -120,6 +121,7 @@ if __name__ == "__main__":
         "v_contents",
         "vh_contents",
         "specific_headers",
+        "image_specific_headers",
     ]
     range_arguments = [
         "vertical",
