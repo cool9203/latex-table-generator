@@ -39,6 +39,7 @@ from latex_table_generator.errors import (
     NotColumnMatchError,
     NotLatexError,
     NotSupportMulticolumnLatexError,
+    NotSupportMulticolumnLatexTableError,
 )
 from latex_table_generator.image2table import run_table_detect as run_table_detect_img2table
 
@@ -69,7 +70,7 @@ _default_css = r"""<style>
 </style>"""
 _random_headers = [
     [
-        {"names": ["編號", "#"], "type": int, "empty": True, "hashtag": False, "sequence": True, "range": None, "choices": None},
+        {"names": ["編號", "#"], "type": int, "empty": False, "hashtag": False, "sequence": True, "range": None, "choices": None},
         {
             "names": ["部位"],
             "type": str,
@@ -219,6 +220,22 @@ def preprocess_latex_table_string(
     return "\\\\\n".join(new_rows)
 
 
+def pre_check_latex_table_string(
+    latex_table_str: str,
+) -> Tuple[str, str]:
+    results = re.findall(_latex_table_begin_pattern, latex_table_str)
+    if not results:
+        raise NotLatexError("Not latex table")
+    elif "multicolumn" in latex_table_str:
+        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
+    elif len(results) > 1:
+        raise NotSupportMulticolumnLatexTableError("Not support convert have latex table")
+
+    begin_str = results[0]
+    end_str = r"\end{tabular}"
+    return (begin_str, end_str)
+
+
 def convert_latex_table_to_pandas(
     latex_table_str: str,
     headers: Union[bool, Sequence[str], None] = None,
@@ -242,10 +259,9 @@ def convert_latex_table_to_pandas(
 def random_generate_latex_table_string(
     headers: List[Dict[str, Any]],
     rows_range: Tuple[int, int],
+    add_space_row_percentage: float,
     rng: random.Random = None,
 ) -> str:
-    {"name": ["編號", "#"], "type": int, "empty": True, "hashtag": False, "sequence": True}
-
     latex_table_str = rf"\begin{{tabular}}{{{'c'.join(['|' for _ in range(len(headers)+1)])}}}"
 
     # Add column name
@@ -260,37 +276,92 @@ def random_generate_latex_table_string(
     sequence_start_index = rng.randint(0, 100)
     rows = list()
     for i in range(rows_count):
+        is_space_row = rng.randint(1, 100) <= int(add_space_row_percentage * 100) if add_space_row_percentage else False
         values = list()
         for header in headers:
-            _type = header.get("type")
-            _empty = header.get("empty", True)
-            _hashtag = header.get("hashtag", False)
-            _sequence = header.get("sequence", False)
-            _range = header.get("range", None)
-            _choices = header.get("choices", None)
-            _type = getattr(__builtins__, _type) if isinstance(_type, str) else _type  # Get type class, ex: <class 'int'>
+            if is_space_row:
+                values.append("")
+            else:
+                _type = header.get("type")
+                _empty = header.get("empty", True)
+                _hashtag = header.get("hashtag", False)
+                _sequence = header.get("sequence", False)
+                _range = header.get("range", None)
+                _choices = header.get("choices", None)
+                _type = getattr(__builtins__, _type) if isinstance(_type, str) else _type  # Get type class, ex: <class 'int'>
 
-            value = None
-            if _empty and rng.randint(0, 1) == 1:
-                pass
-            elif issubclass(_type, (int, float)):
-                if _sequence:
-                    value = sequence_start_index + i
-                elif _range:
-                    value = rng.randint(_range[0], _range[1]) if issubclass(_type, int) else rng.uniform(_range[0], _range[1])
-                else:
-                    value = rng.randint(0, 100) if issubclass(_type, int) else rng.uniform(0, 100)
-            elif _choices and issubclass(_type, str):
-                value = _choices[rng.randint(0, len(_choices) - 1)]
+                value = None
+                if isinstance(_empty, bool) and _empty and rng.randint(0, 1) == 1:
+                    pass
+                elif isinstance(_empty, float) and _empty > 0.0 and rng.randint(1, 100) <= int(_empty * 100):
+                    pass
+                elif issubclass(_type, (int, float)):
+                    if _sequence:
+                        value = sequence_start_index + i
+                    elif _range:
+                        value = rng.randint(_range[0], _range[1]) if issubclass(_type, int) else rng.uniform(_range[0], _range[1])
+                    else:
+                        value = rng.randint(0, 100) if issubclass(_type, int) else rng.uniform(0, 100)
+                elif _choices and issubclass(_type, str):
+                    value = _choices[rng.randint(0, len(_choices) - 1)]
 
-            value = str(value) if value is not None else value
-            value = rf"\#{value}" if value is not None and _hashtag else value
-            values.append(value if value is not None else "")
+                value = str(value) if value is not None else value
+                value = rf"\#{value}" if value is not None and _hashtag else value
+                values.append(value if value is not None else "")
         rows.append(r"\hline " + " & ".join(values))
 
     latex_table_str += "\\\\\n".join(rows)
     latex_table_str += "\\hline\n\\end{tabular}"
     return latex_table_str
+
+
+def dropout_table_content(
+    latex_table_str: str,
+    dropout_percentage: float,
+    rng: random.Random = None,
+) -> str:
+    """Dropout cell content
+
+    Args:
+        latex_table_str (str): latex table string
+        dropout_table_content (float, optional): Dropout table content percentage.
+        rng (random.Random, optional): random generator. Defaults to None.
+
+    Returns:
+        str: Dropped content latex table string
+    """
+    logger.debug("Run dropout_cell_content")
+
+    if dropout_percentage <= 0.0:
+        return latex_table_str
+
+    (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
+    table = convert_latex_table_to_pandas(latex_table_str, headers=True)
+
+    # Get dropout indexes
+    dropout_indexes = list()
+    for i in range(len(table)):
+        for j, v in enumerate(table.iloc[i]):
+            dropout_indexes.append((i, j))
+    rng.shuffle(dropout_indexes)
+    dropout_indexes = dropout_indexes[: int(len(dropout_indexes) * dropout_percentage)]
+
+    # Start drop cell content
+    rows = [r"\hline " + " & ".join([str(c) for c in table.columns])]
+    for i in range(len(table)):
+        contents = list()
+
+        for j, v in enumerate(table.iloc[i]):
+            if (i, j) in dropout_indexes:
+                contents.append("")
+            else:
+                contents.append(v)
+        contents_str = " & ".join(contents)
+        rows.append(rf"\hline {contents_str}" if r"\cline" not in contents_str else contents_str)
+
+    rows.append(r"\hline")
+    final_latex_table_image_str = " \\\\\n".join(rows)
+    return f"{begin_str}\n{final_latex_table_image_str}\n{end_str}"
 
 
 def filling_image_to_cell(
@@ -300,14 +371,7 @@ def filling_image_to_cell(
     rng: random.Random = None,
 ) -> str:
     logger.debug("Run filling_image_to_cell")
-    result = re.findall(_latex_table_begin_pattern, latex_table_str)
-    if not result:
-        raise NotLatexError("Not latex table")
-    elif "multicolumn" in latex_table_str:
-        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
-
-    begin_str = result[0]
-    end_str = r"\end{tabular}"
+    (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
 
     table = convert_latex_table_to_pandas(latex_table_str, headers=True)
     rows = [r"\hline " + " & ".join([str(c) for c in table.columns])]
@@ -325,8 +389,10 @@ def filling_image_to_cell(
         col, col_name = col_names[0]
         logger.debug(f"col: {col}, name: {col_name}")
 
+        is_space_row = sum([1 if v else 0 for v in table.iloc[i]]) == 0
+
         for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
-            if j == col:  # 若是是要替換 image 的欄位
+            if j == col and not is_space_row:  # 若是是要替換 image 的欄位
                 index = rng.randint(0, len(image_paths) - 1)
                 contents.append(rf"\includegraphics{{{image_paths[index]}}}")
             else:
@@ -349,14 +415,7 @@ def merge_horizontal_cell(
 ) -> Tuple[str, str]:
     # TODO: 支援可以少數欄水平合併
     logger.debug("Run merge_horizontal_cell")
-    result = re.findall(_latex_table_begin_pattern, latex_table_str)
-    if not result:
-        raise NotLatexError("Not latex table")
-    elif "multicolumn" in latex_table_str:
-        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
-
-    begin_str = result[0]
-    end_str = r"\end{tabular}"
+    (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
     processed_latex_table_str = preprocess_latex_table_string(latex_table_str)
 
     rows_image = [s.strip() for s in processed_latex_table_str.split(r"\\") if s.strip() and "&" in s]
@@ -392,13 +451,7 @@ def merge_vertical_cell(
     **kwds,
 ) -> Tuple[str, str]:
     logger.debug("Run merge_vertical_cell")
-    result = re.findall(_latex_table_begin_pattern, latex_table_str)
-    if not result:
-        raise NotLatexError("Not latex table")
-    elif "multicolumn" in latex_table_str:
-        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
-
-    begin_str = result[0]
+    (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
     end_str = r"\end{tabular}"
 
     table = convert_latex_table_to_pandas(latex_table_str, headers=True)
@@ -503,13 +556,7 @@ def merge_vertical_and_horizontal_cell(
     **kwds,
 ) -> Tuple[str, str]:
     logger.debug("Run merge_vertical_and_horizontal_cell")
-    result = re.findall(_latex_table_begin_pattern, latex_table_str)
-    if not result:
-        raise NotLatexError("Not latex table")
-    elif "multicolumn" in latex_table_str:
-        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
-
-    begin_str = result[0]
+    (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
     end_str = r"\end{tabular}"
 
     table = convert_latex_table_to_pandas(latex_table_str, headers=True)
@@ -809,6 +856,8 @@ def main(
     multi_table: int = None,
     multi_table_paste_vertical: str = "none",
     html_label_cell_merge: bool = False,
+    add_space_row_percentage: float = 0.1,
+    dropout_percentage: float = None,
     tqdm: bool = True,
     **kwds,
 ):
@@ -883,6 +932,7 @@ def main(
                 random_generate_latex_table_string(
                     headers=_random_headers[0],
                     rows_range=rows_range,
+                    add_space_row_percentage=add_space_row_percentage,
                     rng=rng,
                 )
                 for _ in range(multi_table if multi_table else 1)
@@ -898,6 +948,16 @@ def main(
                     rng=rng,
                     image_paths=image_paths,
                     image_specific_headers=image_specific_headers,
+                )
+                for latex_table_str in latex_table_strs
+            ]
+
+            # Dropout table cell content
+            latex_table_strs = [
+                dropout_table_content(
+                    latex_table_str=latex_table_str,
+                    rng=rng,
+                    dropout_percentage=dropout_percentage,
                 )
                 for latex_table_str in latex_table_strs
             ]

@@ -89,6 +89,18 @@ def arg_parser() -> argparse.Namespace:
         help="Multi table pasting vertical",
     )
     parser.add_argument("--html_label_cell_merge", action="store_true", help="Html label will output merge cell format")
+    parser.add_argument(
+        "--add_space_row_percentage",
+        type=float,
+        default=0.3,
+        help="Full random mode add space row percentage",
+    )
+    parser.add_argument(
+        "--dropout_percentage",
+        type=float,
+        default=None,
+        help="Dropout table content percentage",
+    )
 
     parser.add_argument("--tqdm", action="store_true", help="Use tqdm to show progress bar")
 
