@@ -252,10 +252,9 @@ def convert_latex_table_to_pandas(
 def random_generate_latex_table_string(
     headers: List[Dict[str, Any]],
     rows_range: Tuple[int, int],
+    add_space_row_percentage: float,
     rng: random.Random = None,
 ) -> str:
-    {"name": ["編號", "#"], "type": int, "empty": True, "hashtag": False, "sequence": True}
-
     latex_table_str = rf"\begin{{tabular}}{{{'c'.join(['|' for _ in range(len(headers)+1)])}}}"
 
     # Add column name
@@ -270,32 +269,38 @@ def random_generate_latex_table_string(
     sequence_start_index = rng.randint(0, 100)
     rows = list()
     for i in range(rows_count):
+        is_space_row = rng.randint(1, 100) <= int(add_space_row_percentage * 100) if add_space_row_percentage else False
         values = list()
         for header in headers:
-            _type = header.get("type")
-            _empty = header.get("empty", True)
-            _hashtag = header.get("hashtag", False)
-            _sequence = header.get("sequence", False)
-            _range = header.get("range", None)
-            _choices = header.get("choices", None)
-            _type = getattr(__builtins__, _type) if isinstance(_type, str) else _type  # Get type class, ex: <class 'int'>
+            if is_space_row:
+                values.append("")
+            else:
+                _type = header.get("type")
+                _empty = header.get("empty", True)
+                _hashtag = header.get("hashtag", False)
+                _sequence = header.get("sequence", False)
+                _range = header.get("range", None)
+                _choices = header.get("choices", None)
+                _type = getattr(__builtins__, _type) if isinstance(_type, str) else _type  # Get type class, ex: <class 'int'>
 
-            value = None
-            if _empty and rng.randint(0, 1) == 1:
-                pass
-            elif issubclass(_type, (int, float)):
-                if _sequence:
-                    value = sequence_start_index + i
-                elif _range:
-                    value = rng.randint(_range[0], _range[1]) if issubclass(_type, int) else rng.uniform(_range[0], _range[1])
-                else:
-                    value = rng.randint(0, 100) if issubclass(_type, int) else rng.uniform(0, 100)
-            elif _choices and issubclass(_type, str):
-                value = _choices[rng.randint(0, len(_choices) - 1)]
+                value = None
+                if isinstance(_empty, bool) and _empty and rng.randint(0, 1) == 1:
+                    pass
+                elif isinstance(_empty, float) and _empty > 0.0 and rng.randint(1, 100) <= int(_empty * 100):
+                    pass
+                elif issubclass(_type, (int, float)):
+                    if _sequence:
+                        value = sequence_start_index + i
+                    elif _range:
+                        value = rng.randint(_range[0], _range[1]) if issubclass(_type, int) else rng.uniform(_range[0], _range[1])
+                    else:
+                        value = rng.randint(0, 100) if issubclass(_type, int) else rng.uniform(0, 100)
+                elif _choices and issubclass(_type, str):
+                    value = _choices[rng.randint(0, len(_choices) - 1)]
 
-            value = str(value) if value is not None else value
-            value = rf"\#{value}" if value is not None and _hashtag else value
-            values.append(value if value is not None else "")
+                value = str(value) if value is not None else value
+                value = rf"\#{value}" if value is not None and _hashtag else value
+                values.append(value if value is not None else "")
         rows.append(r"\hline " + " & ".join(values))
 
     latex_table_str += "\\\\\n".join(rows)
@@ -794,6 +799,7 @@ def main(
     format: Set[str] = {"all"},
     multi_table: int = None,
     multi_table_paste_vertical: str = "none",
+    add_space_row_percentage: float = 0.1,
     tqdm: bool = True,
     **kwds,
 ):
@@ -865,6 +871,7 @@ def main(
                 random_generate_latex_table_string(
                     headers=_random_headers[0],
                     rows_range=rows_range,
+                    add_space_row_percentage=add_space_row_percentage,
                     rng=rng,
                 )
                 for _ in range(multi_table if multi_table else 1)

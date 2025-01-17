@@ -88,6 +88,12 @@ def arg_parser() -> argparse.Namespace:
         default="none",
         help="Multi table pasting vertical",
     )
+    parser.add_argument(
+        "--add_space_row_percentage",
+        type=float,
+        default=0.3,
+        help="Full random mode add space row percentage",
+    )
 
     parser.add_argument("--tqdm", action="store_true", help="Use tqdm to show progress bar")
 
