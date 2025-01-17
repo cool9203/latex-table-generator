@@ -1,6 +1,8 @@
 # coding: utf-8
 
+import json
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog
 
 from PIL import Image, ImageTk
@@ -51,6 +53,8 @@ class RectangleDrawer:
         self.canvas.config(width=self.tk_image.width(), height=self.tk_image.height())
         self.image_on_canvas = self.canvas.create_image(0, 0, anchor=tk.NW, image=self.tk_image)
         self.rect_id = None
+        self.start_x = None
+        self.start_y = None
 
     def previous_step(self):
         self.reset_image()
@@ -59,10 +63,39 @@ class RectangleDrawer:
             rect_id = self.canvas.create_rectangle(*rectangle, outline="red", width=2)
 
     def save_label(self):
-        print(self.rectangles)
+        data = list()
+        for rectangle in self.rectangles:
+            data.append(
+                {
+                    "x1": rectangle[0],
+                    "x2": rectangle[2],
+                    "y1": rectangle[1],
+                    "y2": rectangle[3],
+                    "range": [1, 1000],
+                    "choices": [],
+                    "before_choices": [],
+                    "after_choices": [],
+                }
+            )
+
+        output_rootpath = Path(self.image_path).parent
+        output_filename = Path(self.image_path).stem
+        output_path = Path(output_rootpath, f"{str(output_filename)}.txt")
+        with output_path.open(mode="w", encoding="utf-8") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "rotate_angle": 0.0,
+                        "roles": data,
+                    },
+                    indent=4,
+                    ensure_ascii=True,
+                )
+            )
+        print(f"Success save to {output_path!s}")
 
     def load_image(self):
-        file_path = filedialog.askopenfilename(
+        image_path = filedialog.askopenfilename(
             title="Select an Image File",
             filetypes=[
                 (
@@ -72,15 +105,16 @@ class RectangleDrawer:
                 ("All Files", "*.*"),
             ],
         )
-        if not file_path:
+        if not image_path:
             return
 
         try:
-            self.image = Image.open(file_path)
+            self.image_path = image_path
+            self.image = Image.open(image_path)
             self.tk_image = ImageTk.PhotoImage(self.image)
 
-            self.canvas.config(width=self.tk_image.width(), height=self.tk_image.height())
-            self.image_on_canvas = self.canvas.create_image(0, 0, anchor=tk.NW, image=self.tk_image)
+            self.reset_image()
+            self.rectangles = []
         except Exception as e:
             print(f"Failed to load image: {e}")
 
