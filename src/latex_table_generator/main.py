@@ -384,6 +384,8 @@ def filling_image_to_cell(
     if not col_names:
         raise NotColumnMatchError(f"Can not find {image_specific_headers} column name")
 
+    _image_paths = image_paths.copy()
+    rng.shuffle(_image_paths)
     for i in range(len(table)):
         contents = list()
         col, col_name = col_names[0]
@@ -393,7 +395,7 @@ def filling_image_to_cell(
 
         for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
             if j == col and not is_space_row:  # 若是是要替換 image 的欄位
-                index = rng.randint(0, len(image_paths) - 1)
+                index = i % len(_image_paths)
                 contents.append(rf"\includegraphics{{{image_paths[index]}}}")
             else:
                 contents.append(v)
