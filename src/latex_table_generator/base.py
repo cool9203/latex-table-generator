@@ -181,3 +181,25 @@ def get_image(
         img = cv2.imdecode(np.frombuffer(_src, np.uint8), cv2.IMREAD_COLOR)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img
+
+
+def image_resize(
+    src: InputType,
+    size: Tuple[int, int] = None,
+    scale: float = None,
+) -> PILImage.Image:
+    # interpolation reference: https://stackoverflow.com/questions/23853632/which-kind-of-interpolation-best-for-resizing-image
+    if size:
+        image = get_image(src=src)
+        scale = scale if scale else min(size[0] / image.shape[0], size[1] / image.shape[1])
+        interpolation = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
+        image = cv2.resize(
+            src=image,
+            dsize=(
+                int(image.shape[1] * scale),
+                int(image.shape[0] * scale),
+            ),
+            interpolation=interpolation,
+        )
+        src = PILImage.fromarray(image)
+    return src

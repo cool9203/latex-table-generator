@@ -6,10 +6,6 @@ import os
 import pprint
 from pathlib import Path
 
-from PIL import Image as PILImage
-
-image_extensions = {ex for ex, f in PILImage.registered_extensions().items() if f in PILImage.OPEN}
-
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
@@ -150,23 +146,6 @@ if __name__ == "__main__":
             setattr(args, range_argument, int(arg[0]))
         else:
             delattr(args, range_argument)
-
-    # Process image_path argument
-    image_paths = list()
-    for image_folder_path in args.image_paths:
-        path = Path(image_folder_path)
-        if path.is_dir() and path.exists():
-            for image_path in path.iterdir():
-                if image_path.suffix.lower() in image_extensions:
-                    image_paths.append(str(image_path.resolve()))
-            logger.debug(f"Load '{path!s}' image data path")
-        elif path.is_file() and path.exists():
-            if path.suffix.lower() in image_extensions:
-                image_paths.append(str(path.resolve()))
-            logger.debug(f"Load '{path!s}' image")
-        else:
-            logger.debug(f"Not Load '{image_folder_path}' image data path, path not exists")
-    args.image_paths = image_paths
 
     args = vars(args)
     print(pprint.pformat(args))
