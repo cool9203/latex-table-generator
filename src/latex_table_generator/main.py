@@ -747,7 +747,15 @@ def paste_fit_size_latex_table_to_image(
             image = rotate_img_with_border(img=image, angle=skew_angle)
 
             if image.shape[1] > image_width:
-                image = image_resize(src=image)
+                scale = image_width / image.shape[1]
+                image = cv2.resize(
+                    src=image,
+                    dsize=(
+                        int(image.shape[1] * scale),
+                        int(image.shape[0] * scale),
+                    ),
+                    interpolation=cv2.INTER_AREA,
+                )
 
             if image.shape[0] > image_height:
                 continue
