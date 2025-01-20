@@ -72,6 +72,7 @@ class RectangleDrawer:
                     "y1": rectangle[1],
                     "y2": rectangle[3],
                     "range": [1, 1000],
+                    "angle": False,
                     "choices": [],
                     "before_choices": [],
                     "after_choices": [],
