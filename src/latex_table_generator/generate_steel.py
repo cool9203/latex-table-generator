@@ -263,7 +263,7 @@ def load_image(
 if __name__ == "__main__":
     rng = random.Random(10)
     steels = load_image(
-        image_path="./images/steels",
+        image_paths=["./images/steels"],
         rng=rng,
     )
 
