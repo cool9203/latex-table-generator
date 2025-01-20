@@ -8,7 +8,10 @@ from os import PathLike
 from pathlib import Path
 from typing import List, Sequence, Tuple, Union
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image as PILImage
+from PIL import ImageDraw, ImageFont
+
+from latex_table_generator.base import image_resize
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
@@ -56,11 +59,16 @@ class SteelRole:
 
 
 @dataclass
-class Steel:
-    origin_image: Image.Image
-    image: Image.Image
+class ImageBase:
+    origin_image: PILImage.Image
+    image: PILImage.Image
     role_path: PathLike
     image_path: PathLike
+    size: Tuple[int, int]
+
+
+@dataclass
+class Steel(ImageBase):
     rotate_angle: float = 0.0
     roles: List[SteelRole] = field(default_factory=[])
     rng: random.Random = None
@@ -70,6 +78,7 @@ class Steel:
         image_path: PathLike,
         role_path: PathLike = None,
         rotate_angle: float = 0.0,
+        size: Tuple[int, int] = None,
         rng: random.Random = None,
     ):
         self.image_path = Path(image_path)
@@ -85,16 +94,17 @@ class Steel:
         for role in data.get("roles"):
             self.roles.append(SteelRole(**role))
 
-        image = Image.open(image_path)
+        image = PILImage.open(image_path)
         self.origin_image = image
         self.image = self.hollow_image(image)
+        self.size = size
         self.rotate_angle = rotate_angle
         self.rng = rng if rng else random.Random()
 
     def hollow_image(
         self,
-        image: Image.Image,
-    ) -> Image.Image:
+        image: PILImage.Image,
+    ) -> PILImage.Image:
         _image = image.copy()
         draw_image = ImageDraw.Draw(_image)
         for role in self.roles:
@@ -105,7 +115,7 @@ class Steel:
     def draw_bbox(
         self,
         roles: List[SteelRole] = None,
-    ) -> Image.Image:
+    ) -> PILImage.Image:
         roles = roles if roles else self.roles
         image = self.origin_image.copy()
         draw_image = ImageDraw.Draw(image)
@@ -120,12 +130,15 @@ class Steel:
         roles: List[SteelRole] = None,
         font: str = "mingliu.ttc",
         font_color: Union[str, Tuple[int, int, int]] = (0, 0, 0),
+        size: Tuple[int, int] = None,
         rng: random.Random = None,
-    ) -> Tuple[Image.Image, str]:
+    ) -> Tuple[PILImage.Image, str]:
         rng = rng if rng else self.rng
         roles = roles if roles else self.roles
+        size = size if size else self.size
 
-        draw_image = ImageDraw.Draw(self.image)
+        image = self.image.copy()
+        draw_image = ImageDraw.Draw(image)
         label_texts = list()
         for role in roles:
             text = ""
@@ -148,20 +161,23 @@ class Steel:
             draw_image.text((role.x1, role.y1), text, fill=font_color, font=_font)
             label_texts.append(text)
         del draw_image
-        return (self.image, " ".join(label_texts))
+        return (image_resize(src=image, size=size), " ".join(label_texts))
 
     def random_generate(
         self,
         roles: List[SteelRole] = None,
         font: str = "mingliu.ttc",
         font_color: Union[str, Tuple[int, int, int]] = (0, 0, 0),
+        size: Tuple[int, int] = None,
         rng: random.Random = None,
         fraction: float = 0.5,
-    ) -> Tuple[Image.Image, str]:
+    ) -> Tuple[PILImage.Image, str]:
         rng = rng if rng else self.rng
         roles = roles if roles else self.roles
+        size = size if size else self.size
 
-        draw_image = ImageDraw.Draw(self.image)
+        image = self.image.copy()
+        draw_image = ImageDraw.Draw(image)
         label_texts = list()
         for role in roles:
             text = ""
@@ -185,29 +201,68 @@ class Steel:
             )
             draw_image.text((start_x, start_y), text, fill=font_color, font=_font)
             label_texts.append(text)
-        return (self.image, " ".join(label_texts))
+        return (image_resize(src=image, size=size), " ".join(label_texts))
 
 
-def load_steel(
-    image_path: PathLike,
-    _extensions: List[str] = ["png", "jpg", "jpeg"],
+@dataclass
+class NormalImage(ImageBase):
+    label: str
+
+    def __init__(
+        self,
+        image_path: PathLike,
+        role_path: PathLike = None,
+        size: Tuple[int, int] = None,
+        **kwds,
+    ):
+        self.image_path = Path(image_path)
+        self.roles = list()
+        if role_path:
+            self.role_path = Path(role_path)
+        elif Path(self.image_path.parent, f"{self.image_path.stem}.txt").exists():
+            self.role_path = Path(self.image_path.parent, f"{self.image_path.stem}.txt")
+        with self.role_path.open("r", encoding="utf-8") as f:
+            self.label = f.read()
+
+        image = PILImage.open(image_path)
+        self.origin_image = image
+        self.size = size
+        self.image = self._resize(image)
+
+    def generate(self, **kwds) -> Tuple[PILImage.Image, str]:
+        return (self.image, self.label)
+
+
+def load_image(
+    image_paths: List[PathLike],
+    extensions: List[str] = [".png", ".jpg", ".jpeg"],
     rng: random.Random = None,
 ) -> List[Steel]:
     rng = rng if rng else random.Random()
-    image_paths = list()
-    for _extension in _extensions:
-        image_paths += [p for p in Path(image_path).glob(f"*.{_extension.lower()}")]
-        image_paths += [p for p in Path(image_path).glob(f"*.{_extension.upper()}")]
-
-    steels = list()
+    _image_paths = list()
     for image_path in image_paths:
-        steels.append(Steel(image_path, rng=rng))
+        image_path = Path(image_path)
+        if image_path.is_dir():
+            for _extension in extensions:
+                _image_paths += [p for p in Path(image_path).glob(f"*{_extension.lower()}")]
+                _image_paths += [p for p in Path(image_path).glob(f"*{_extension.upper()}")]
+        else:
+            if image_path.suffix in extensions:
+                _image_paths.append(image_path)
+
+    logger.debug(f"load images: {_image_paths}")
+    steels = list()
+    for _image_path in _image_paths:
+        try:
+            steels.append(Steel(_image_path, rng=rng))
+        except json.JSONDecodeError:
+            steels.append(NormalImage(_image_path))
     return steels
 
 
 if __name__ == "__main__":
     rng = random.Random(10)
-    steels = load_steel(
+    steels = load_image(
         image_path="./images/steels",
         rng=rng,
     )
@@ -216,4 +271,3 @@ if __name__ == "__main__":
         (image, label) = steel.generate()
         logger.debug(label)
         image.show()
-        input()
