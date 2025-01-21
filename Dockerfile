@@ -1,6 +1,6 @@
 FROM ubuntu:24.10
 
-LABEL MAINTAINER="ychsu@iii.org.com"
+LABEL MAINTAINER="cool9203@gmail.com"
 
 ARG PYTHON_VERSION=python3.10
 ARG UV_VERSION=0.5.7
@@ -11,13 +11,14 @@ WORKDIR /app
 COPY ./scripts/install-pandoc.sh ./
 
 RUN apt update && \
-    apt install wkhtmltopdf wget \
+    apt install wkhtmltopdf fonts-noto-cjk wget \
     ARCH=${OS_ARCH} bash install-pandoc.sh
 
 COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /bin/uv
-COPY ./src ./pyproject.toml ./README.md ./uv.lock ./
+COPY ./src ./scripts ./pyproject.toml ./README.md ./uv.lock ./
 RUN uv sync
+COPY ./fonts/mingliu.ttc /usr/share/fonts/mingliu.ttc
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-CMD ["uv", "run", "src/latex_table_generator"]
+ENTRYPOINT ["uv", "run", "src/latex_table_generator"]
