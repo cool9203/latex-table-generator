@@ -11,8 +11,9 @@ import pandas as pd
 
 from latex_table_generator.errors import (
     NotLatexError,
+    NotSupportLatexError,
     NotSupportMulticolumnLatexError,
-    NotSupportMulticolumnLatexTableError,
+    NotSupportMultiLatexTableError,
 )
 
 _latex_table_begin_pattern = r"\\begin{tabular}{.*}"
@@ -85,7 +86,7 @@ def pre_check_latex_table_string(
     elif "multicolumn" in latex_table_str:
         raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
     elif len(results) > 1:
-        raise NotSupportMulticolumnLatexTableError("Not support convert have latex table")
+        raise NotSupportMultiLatexTableError("Not support convert have multi latex table")
 
     begin_str = results[0]
     end_str = r"\end{tabular}"
@@ -96,6 +97,7 @@ def convert_latex_table_to_pandas(
     latex_table_str: str,
     headers: Union[bool, Sequence[str], None] = None,
 ) -> pd.DataFrame:
+    pre_check_latex_table_string(latex_table_str=latex_table_str)
     processed_latex_table_str = preprocess_latex_table_string(latex_table_str)
     rows = [row.strip() for row in processed_latex_table_str.split(r"\\") if "&" in row]  # 過濾掉無關的行
 
@@ -103,10 +105,13 @@ def convert_latex_table_to_pandas(
     table_data = [row.replace(r"\\", "").replace(r"\hline", "").strip().split("&") for row in rows]
     cleaned_data = [[cell.strip() for cell in row] for row in table_data]
 
-    if isinstance(headers, bool) and headers:
-        headers = cleaned_data[0]  # 第一行是列名
-        data = cleaned_data[1:]  # 剩餘的是數據
-        df = pd.DataFrame(data, columns=headers)
-    elif headers:
-        df = pd.DataFrame(cleaned_data)
+    try:
+        if isinstance(headers, bool) and headers:
+            headers = cleaned_data[0]  # 第一行是列名
+            data = cleaned_data[1:]  # 剩餘的是數據
+            df = pd.DataFrame(data, columns=headers)
+        elif headers:
+            df = pd.DataFrame(cleaned_data)
+    except ValueError as e:
+        raise NotSupportLatexError("Not support this latex") from e
     return df
