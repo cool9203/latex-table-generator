@@ -227,7 +227,7 @@ class NormalImage(ImageBase):
         image = PILImage.open(image_path)
         self.origin_image = image
         self.size = size
-        self.image = self._resize(image)
+        self.image = image_resize(image)
 
     def generate(self, **kwds) -> Tuple[PILImage.Image, str]:
         return (self.image, self.label)
