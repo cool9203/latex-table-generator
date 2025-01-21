@@ -150,7 +150,8 @@ if __name__ == "__main__":
     args = vars(args)
     print(pprint.pformat(args))
 
-    from latex_table_generator.main import get_subfolder_path, main
+    from latex_table_generator.main import main
+    from latex_table_generator.utils import get_subfolder_path
 
     input_paths = args.pop("input_path")
     if input_paths:

@@ -15,33 +15,7 @@ import pandas as pd
 import pypandoc
 import tqdm as TQDM
 
-
-def get_subfolder_path(
-    path: PathLike,
-    targets: Sequence[Union[str, Sequence[str]]] = (("*.txt"),),
-) -> List[Path]:
-    subfolder_paths = list()
-    find_paths = [path]
-    while find_paths:
-        find_path = Path(find_paths.pop(0))
-
-        status = [False for _ in range(len(targets))]
-        for i, target in enumerate(targets):
-            if isinstance(target, str):
-                if [p for p in Path(find_path).glob(target)]:
-                    status[i] = True
-            else:
-                for _target in target:
-                    if [p for p in Path(find_path).glob(_target)]:
-                        status[i] = True
-
-        if np.array(status).all():
-            subfolder_paths.append(find_path)
-
-        for folder in find_path.iterdir():
-            if folder.is_dir():
-                find_paths.append(folder)
-    return subfolder_paths
+from latex_table_generator.utils import get_subfolder_path
 
 
 def arg_parser() -> argparse.Namespace:
@@ -95,7 +69,10 @@ if __name__ == "__main__":
     extensions = args.extensions
 
     for path in paths:
-        subfolder_paths = get_subfolder_path(path)
+        subfolder_paths = get_subfolder_path(
+            path,
+            targets=(("*.txt"),),
+        )
         for subfolder_path in subfolder_paths:
             filenames = list()
             for extension in extensions:
