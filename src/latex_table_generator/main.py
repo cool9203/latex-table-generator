@@ -452,6 +452,7 @@ def merge_vertical_cell(
     contents: Union[Sequence[str], str] = None,
     vertical: Union[int, Tuple[int, int]] = 1,
     specific_headers: Sequence[str] = None,
+    latex_merge_use_special_content: bool = False,
     **kwds,
 ) -> Tuple[str, str]:
     logger.debug("Run merge_vertical_cell")
@@ -524,7 +525,10 @@ def merge_vertical_cell(
                         if all_cell_contents[index]
                         else _cell_contents[rng.randint(0, len(_cell_contents) - 1)]
                     )
-                    contents_label.append(f"**{multirow_num} {_cell_content}")
+                    if latex_merge_use_special_content:
+                        contents_label.append(f"**{multirow_num} {_cell_content}")
+                    else:
+                        contents_label.append(_cell_content)
                     if i in rand_nums:  # multirow 不會重複加, 所以只加第一次
                         contents_image.append(rf"\multirow{{{multirow_num}}}{{*}}{{{_cell_content}}}")
                     else:
@@ -557,6 +561,7 @@ def merge_vertical_and_horizontal_cell(
     contents: Union[Sequence[str], str] = None,
     vertical: Union[int, Tuple[int, int]] = 1,
     horizontal: Union[int, Tuple[int, int]] = 1,
+    latex_merge_use_special_content: bool = False,
     **kwds,
 ) -> Tuple[str, str]:
     logger.debug("Run merge_vertical_and_horizontal_cell")
@@ -624,7 +629,10 @@ def merge_vertical_and_horizontal_cell(
                     logger.debug(f"row_span: {row_span}")
 
                     _cell_content = all_cell_contents[index]
-                    contents_label.append(f"**{row_span} {_cell_content}")
+                    if latex_merge_use_special_content:
+                        contents_label.append(f"**{row_span} {_cell_content}")
+                    else:
+                        contents_label.append(_cell_content)
                     if i in rand_nums:  # multirow 不會重複加, 所以只加第一次
                         if j == col[0]:
                             contents_image.append(
@@ -777,7 +785,7 @@ def paste_fit_size_latex_table_to_image(
                 break
             except ValueError as e:
                 raise ImagePasteError("Can't paste image") from e
-    return final_image, table_positions
+    return (final_image, table_positions)
 
 
 def merge_cell(
@@ -791,6 +799,7 @@ def merge_cell(
     horizontal: Union[int, Tuple[int, int]],
     vertical_count: Union[int, Tuple[int, int]],
     horizontal_count: Union[int, Tuple[int, int]],
+    latex_merge_use_special_content: bool,
     rng: random.Random = None,
 ):
     __error = ValueError(f"merge_methods have not support method, should be choice from {_support_merge_methods}")
@@ -813,6 +822,7 @@ def merge_cell(
             specific_headers=specific_headers,
             vertical=vertical,
             count=vertical_count if isinstance(vertical_count, int) else rng.randint(vertical_count[0], vertical_count[1]),
+            latex_merge_use_special_content=latex_merge_use_special_content,
         )
     elif merge_method == "horizontal":
         (latex_table_image_str, latex_table_label_str) = merge_horizontal_cell(
@@ -822,6 +832,7 @@ def merge_cell(
             count=horizontal_count
             if isinstance(horizontal_count, int)
             else rng.randint(horizontal_count[0], horizontal_count[1]),
+            latex_merge_use_special_content=latex_merge_use_special_content,
         )
     elif merge_method == "hybrid":
         (latex_table_image_str, latex_table_label_str) = merge_vertical_and_horizontal_cell(
@@ -830,6 +841,7 @@ def merge_cell(
             contents=vh_contents,
             vertical=vertical,
             horizontal=horizontal,
+            latex_merge_use_special_content=latex_merge_use_special_content,
         )
     else:
         (latex_table_image_str, latex_table_label_str) = (latex_table_str, latex_table_str)
@@ -860,15 +872,21 @@ def main(
     multi_table: int = None,
     multi_table_paste_vertical: str = "none",
     html_label_cell_merge: bool = False,
+    latex_label_cell_merge: bool = False,
+    latex_merge_use_special_content: bool = False,
     add_space_row_percentage: float = 0.3,
     dropout_percentage: float = None,
     image_size: Tuple[int, int] = (200, 200),
+    base_image_background_color: Tuple[int, int, int] = (255, 255, 255),
     tqdm: bool = True,
     **kwds,
 ):
     assert input_path is not None or (count is not None and count > 0), "Need pass 'input_path' or 'count'"
 
     format = set(format) if isinstance(format, (list, tuple)) else format
+    base_image_background_color = (
+        tuple(base_image_background_color) if isinstance(base_image_background_color, list) else base_image_background_color
+    )
     rng = random.Random(kwds.get("seed", os.environ.get("SEED", None)))
     logger.setLevel(kwds.get("log_level", os.environ.get("LOG_LEVEL", "INFO")))
     full_random_generate = False
@@ -932,7 +950,7 @@ def main(
                 latex_table_str = f.read()
                 latex_table_strs = [latex_table_str for _ in range(multi_table if multi_table else 1)]
         else:
-            file_image = PILImage.new(mode="RGB", size=new_image_size, color=(255, 255, 255))
+            file_image = PILImage.new(mode="RGB", size=new_image_size, color=base_image_background_color)
             file_image = get_image(src=file_image)
             latex_table_strs = [
                 random_generate_latex_table_string(
@@ -1002,6 +1020,7 @@ def main(
                         horizontal=horizontal,
                         vertical_count=vertical_count,
                         horizontal_count=horizontal_count,
+                        latex_merge_use_special_content=latex_merge_use_special_content,
                         rng=rng,
                     )
                     for latex_table_str in latex_table_strs
@@ -1024,7 +1043,12 @@ def main(
                         )
                         for latex_table_merged_str in latex_table_merged_strs
                     ]
-                    hollow_image = draw_table_bbox(src=file_image, tables=tables, margin=5)
+                    hollow_image = draw_table_bbox(
+                        src=file_image,
+                        tables=tables,
+                        margin=5,
+                        color=base_image_background_color,
+                    )
 
                     _skew_angle = (
                         skew_angle if isinstance(skew_angle, (int, float)) else rng.uniform(skew_angle[0], skew_angle[1])
@@ -1077,7 +1101,10 @@ def main(
                                 f.write("\n\n".join(markdown_tables))
 
                             elif "latex" in format:
-                                f.write("\n".join(latex_table_label_results))
+                                if latex_label_cell_merge:
+                                    f.write("\n".join(latex_table_image_results))
+                                else:
+                                    f.write("\n".join(latex_table_label_results))
 
                             elif "html" in format:
                                 html_tables = list()
@@ -1098,7 +1125,10 @@ def main(
                         # Save latex
                         if "all" in format or "latex" in format:
                             with Path(output_path_latex, filename.stem + ".txt").open("w", encoding="utf-8") as f:
-                                f.write("\n".join(latex_table_label_results))
+                                if latex_label_cell_merge:
+                                    f.write("\n".join(latex_table_image_results))
+                                else:
+                                    f.write("\n".join(latex_table_label_results))
 
                         # Save markdown
                         if "all" in format or "markdown" in format:

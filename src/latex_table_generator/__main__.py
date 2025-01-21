@@ -64,6 +64,9 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("--skew_angle", type=int, nargs="+", default=[-5, 5], help="Table image rotate angle")
     parser.add_argument("--new_image_size", type=int, nargs="+", default=[2480, 3508], help="Full random mode new image size")
     parser.add_argument(
+        "--base_image_background_color", type=int, nargs="+", default=[], help="Full random mode base image background color"
+    )
+    parser.add_argument(
         "--min_crop_size",
         type=float,
         default=None,
@@ -87,6 +90,10 @@ def arg_parser() -> argparse.Namespace:
         help="Multi table pasting vertical",
     )
     parser.add_argument("--html_label_cell_merge", action="store_true", help="Html label will output merge cell format")
+    parser.add_argument("--latex_label_cell_merge", action="store_true", help="Latex label will output merge cell format")
+    parser.add_argument(
+        "--latex_merge_use_special_content", action="store_true", help="label will use normal content, not use '**n content'"
+    )
     parser.add_argument(
         "--add_space_row_percentage",
         type=float,
@@ -126,6 +133,7 @@ if __name__ == "__main__":
         "skew_angle",
         "new_image_size",
         "rows_range",
+        "base_image_background_color",
     ]
 
     # Pre-process arguments
@@ -136,7 +144,9 @@ if __name__ == "__main__":
     # Process range argument
     for range_argument in range_arguments:
         arg = getattr(args, range_argument)
-        if len(arg) > 1:
+        if len(arg) > 2:
+            setattr(args, range_argument, [int(n) for n in arg])
+        elif len(arg) == 2:
             setattr(
                 args,
                 range_argument,

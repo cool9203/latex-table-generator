@@ -9,6 +9,7 @@ SEED=99 LOG_LEVEL=INFO \
     --vh_contents "工作筋" "鋼材筋" "寬止筋" "含上層工作筋" "增築" "上增築" "穿樑補強" "角隅增強" "角隅增強*120" \
         "CS花台" "柱擴柱" "門窗補強" "電梯剪力牆" "車道" "車道預留*10" "甘蔗筋" "開口補強" "增築" \
     --image_path "./steels" \
+    --base_image_background_color 255 255 255 \
     --horizontal_count 1 3 \
     --vertical_count 1 3 \
     --skew_angle -3 3 \
@@ -19,4 +20,5 @@ SEED=99 LOG_LEVEL=INFO \
     --dropout_percentage 0.3 \
     --merge_methods "horizontal" "vertical" "hybrid" \
     --html_label_cell_merge \
+    --latex_label_cell_merge \
     --tqdm
