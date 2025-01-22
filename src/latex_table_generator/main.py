@@ -411,13 +411,22 @@ def filling_image_to_cell(
 
 def merge_horizontal_cell(
     latex_table_str: str,
-    rng: random.Random = None,
+    rng: random.Random = random.Random(),
     count: int = 1,
     contents: Union[Sequence[str], str] = None,
-    horizontal: Union[int, Tuple[int, int]] = 1,
     **kwds,
 ) -> Tuple[str, str]:
-    # TODO: 支援可以少數欄水平合併
+    """Merge horizontal cell
+
+    Args:
+        latex_table_str (str): latex table string
+        rng (random.Random, optional): random generator. Defaults to random.Random().
+        count (int, optional): merge counts. Defaults to 1.
+        contents (Union[Sequence[str], str], optional): merge contents. Defaults to None.
+
+    Returns:
+        Tuple[str, str]: (image latex, label latex)
+    """
     logger.debug("Run merge_horizontal_cell")
     (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
     processed_latex_table_str = preprocess_latex_table_string(latex_table_str)
@@ -430,10 +439,30 @@ def merge_horizontal_cell(
 
     for rand_num in rand_nums:  # 執行 count 次
         texts = rows_image[rand_num].replace(r"\hline", "").strip().split("&")
-        texts_str = contents[rng.randint(0, len(contents) - 1)] if contents else texts[rng.randint(0, len(texts) - 1)]
-        texts_str_label = "&".join([texts_str for _ in range(len(texts))])
-        rows_image[rand_num] = rf"\hline \multicolumn{{{len(texts)}}}{{|c|}}{{{texts_str}}}"
-        rows_label[rand_num] = rf"\hline {texts_str_label}"
+        merge_content = contents[rng.randint(0, len(contents) - 1)] if contents else texts[rng.randint(0, len(texts) - 1)]
+        merge_content_label = "&".join([merge_content for _ in range(len(texts))])
+
+        total, list_of_merge = (0, [])
+        cell_counts = len(texts)  # 總共的 cell 數
+        while True:
+            # 抽合併
+            do_merge_cells_count = random.randint(1, cell_counts)
+            if total + do_merge_cells_count > cell_counts:
+                list_of_merge.append(texts[total:])
+                break
+            elif do_merge_cells_count == 1:  # 只抽到合併數1 不合併
+                list_of_merge.append([texts[total]])
+            else:  # 抽到合併複數格
+                list_of_merge.append(texts[total : total + do_merge_cells_count])
+            total = total + do_merge_cells_count
+            if total == cell_counts:
+                break
+        cells_merge = list()
+        for i in list_of_merge:
+            cells_merge.append(f"\multicolumn{{{len(i)}}}{{|c|}}{{{merge_content}}}")
+        row_merge = "&".join(cells_merge)
+        rows_image[rand_num] = rf"\hline {row_merge}"
+        rows_label[rand_num] = rf"\hline {merge_content_label}"
 
     rows_image.append(r"\hline")
     rows_label.append(r"\hline")
