@@ -414,6 +414,7 @@ def merge_horizontal_cell(
     rng: random.Random = random.Random(),
     count: int = 1,
     contents: Union[Sequence[str], str] = None,
+    horizontal: Union[Sequence[int], int] = None,
     **kwds,
 ) -> Tuple[str, str]:
     """Merge horizontal cell
@@ -423,6 +424,7 @@ def merge_horizontal_cell(
         rng (random.Random, optional): random generator. Defaults to random.Random().
         count (int, optional): merge counts. Defaults to 1.
         contents (Union[Sequence[str], str], optional): merge contents. Defaults to None.
+        horizontal (Union[Sequence[int], int], optional): merge cell range, ex: set your self is (>=2 or [2, n]), random is (None or -1). Defaults to None.
 
     Returns:
         Tuple[str, str]: (image latex, label latex)
@@ -442,24 +444,37 @@ def merge_horizontal_cell(
         merge_content = contents[rng.randint(0, len(contents) - 1)] if contents else texts[rng.randint(0, len(texts) - 1)]
         merge_content_label = "&".join([merge_content for _ in range(len(texts))])
 
-        total, list_of_merge = (0, [])
+        list_of_merge = []
         cell_counts = len(texts)  # 總共的 cell 數
-        while True:
-            # 抽合併
-            do_merge_cells_count = random.randint(1, cell_counts)
-            if total + do_merge_cells_count > cell_counts:
-                list_of_merge.append(texts[total:])
-                break
-            elif do_merge_cells_count == 1:  # 只抽到合併數1 不合併
-                list_of_merge.append([texts[total]])
-            else:  # 抽到合併複數格
-                list_of_merge.append(texts[total : total + do_merge_cells_count])
-            total = total + do_merge_cells_count
-            if total == cell_counts:
-                break
+
+        # 抽合併
+        if horizontal is None or (isinstance(horizontal, int) and horizontal < 0):
+            random_place = random.randint(0, cell_counts - 2)
+        elif isinstance(horizontal, int):
+            if horizontal < 2:
+                raise ValueError(f"horizontal need >= 2, but got '{horizontal}'")
+            random_place = random.randint(0, min(horizontal, cell_counts - 2))
+        elif isinstance(horizontal, (list, tuple)):
+            if len(horizontal) < 2:
+                raise ValueError(f"horizontal need pass 2 int, but got '{horizontal}'")
+            elif horizontal[0] < 2:
+                raise ValueError(f"horizontal first number need >= 2, but got '{horizontal[0]}'")
+            random_place = random.randint(0, cell_counts - 2)
+        do_merge_cells_count = random.randint(2, cell_counts)
+        list_of_merge = [i for i in texts[:random_place]]  # 合併格子位置之前的數字
+        if random_place + do_merge_cells_count >= cell_counts:  # 合併到底
+            list_of_merge.append(texts[random_place:])
+        else:  # 合併至中間
+            list_of_merge.append(texts[random_place : random_place + do_merge_cells_count])
+            for i in texts[random_place + do_merge_cells_count :]:
+                list_of_merge.append(i)  # 合併格子位置之後的數字
+
         cells_merge = list()
         for i in list_of_merge:
-            cells_merge.append(f"\multicolumn{{{len(i)}}}{{|c|}}{{{merge_content}}}")
+            if isinstance(i, list):
+                cells_merge.append(f"\multicolumn{{{len(i)}}}{{|c|}}{{{merge_content}}}")
+            else:
+                cells_merge.append(i)
         row_merge = "&".join(cells_merge)
         rows_image[rand_num] = rf"\hline {row_merge}"
         rows_label[rand_num] = rf"\hline {merge_content_label}"
@@ -858,6 +873,7 @@ def merge_cell(
             latex_table_str=latex_table_str,
             rng=rng,
             contents=h_contents,
+            horizontal=horizontal,
             count=horizontal_count
             if isinstance(horizontal_count, int)
             else rng.randint(horizontal_count[0], horizontal_count[1]),
