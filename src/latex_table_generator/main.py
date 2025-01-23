@@ -1,5 +1,6 @@
 # coding: utf-8
 
+import builtins
 import json
 import logging
 import os
@@ -197,12 +198,12 @@ def random_generate_latex_table_string(
                 values.append("")
             else:
                 _type = header.get("type")
-                _empty = header.get("empty", True)
+                _empty = header.get("empty", False)
                 _hashtag = header.get("hashtag", False)
                 _sequence = header.get("sequence", False)
                 _range = header.get("range", None)
                 _choices = header.get("choices", None)
-                _type = getattr(__builtins__, _type) if isinstance(_type, str) else _type  # Get type class, ex: <class 'int'>
+                _type = getattr(builtins, _type) if isinstance(_type, str) else _type  # Get type class, ex: <class 'int'>
 
                 value = None
                 if isinstance(_empty, bool) and _empty and rng.randint(0, 1) == 1:
