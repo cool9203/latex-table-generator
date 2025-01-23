@@ -50,7 +50,7 @@ from latex_table_generator.utils import (
 
 _image_extensions = {ex for ex, f in PILImage.registered_extensions().items() if f in PILImage.OPEN}
 _support_merge_methods = ["horizontal", "vertical", "hybrid", "none"]
-_latex_includegraphics_pattern = r"\\includegraphics{(.*.(?:jpg|png|JPG|PNG))}"
+_latex_includegraphics_pattern = r"\\includegraphics{([\S]*.(?:jpg|png|JPG|PNG))}"
 
 _default_css = r"""<style>
     table,
