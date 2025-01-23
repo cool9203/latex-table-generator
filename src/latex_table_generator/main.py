@@ -530,10 +530,12 @@ def merge_vertical_cell(
     for rand_num_index, rand_num in enumerate(rand_nums):
         while True:
             # 檢查 vertical
-            if isinstance(vertical, int):
+            if vertical is None or isinstance(vertical, int) < 0:
+                multirow_num = rng.randint(1, len(table) - rand_num) + 1
+            elif isinstance(vertical, int):
                 multirow_num = vertical + 1
             elif isinstance(vertical, (tuple, list)) and len(vertical) >= 2:
-                multirow_num = rng.randint(vertical[0], min(vertical[1], len(table) - rand_num)) + 1
+                multirow_num = rng.randint(vertical[0], min(vertical[1] - 1, len(table) - rand_num)) + 1
             else:
                 raise TypeError(f"vertical should be int or tuple. But got '{vertical}'")
 
@@ -623,10 +625,12 @@ def merge_vertical_and_horizontal_cell(
     col_names = list()
     for i, col_name in enumerate(table.columns):
         # 檢查 horizontal
-        if isinstance(horizontal, int):
+        if horizontal is None or isinstance(horizontal, int) < 0:
+            col_span = rng.randint(1, len(table.columns)) + 1
+        elif isinstance(horizontal, int):
             col_span = horizontal + 1
         elif isinstance(horizontal, (tuple, list)) and len(horizontal) >= 2:
-            col_span = rng.randint(horizontal[0], min(horizontal[1], len(table.columns))) + 1
+            col_span = rng.randint(horizontal[0], min(horizontal[1] - 1, len(table.columns))) + 1
         else:
             raise TypeError(f"horizontal should be int or tuple. But got '{horizontal}'")
         col_names.append(([i + col for col in range(col_span)], col_name))
@@ -639,10 +643,12 @@ def merge_vertical_and_horizontal_cell(
     for rand_num_index, rand_num in enumerate(rand_nums):
         while True:
             # 檢查 vertical
-            if isinstance(vertical, int):
+            if vertical is None or isinstance(vertical, int) < 0:
+                row_span = rng.randint(1, len(table) - rand_num) + 1
+            elif isinstance(vertical, int):
                 row_span = vertical + 1
             elif isinstance(vertical, (tuple, list)) and len(vertical) >= 2:
-                row_span = rng.randint(vertical[0], min(vertical[1], len(table) - rand_num)) + 1
+                row_span = rng.randint(vertical[0], min(vertical[1] - 1, len(table) - rand_num)) + 1
             else:
                 raise TypeError(f"vertical should be int or tuple. But got '{vertical}'")
 
@@ -901,8 +907,8 @@ def main(
     v_contents: List[str] = ["彎鉤", "鋼材筋"],
     vh_contents: List[str] = ["開口補強", "鋼材筋"],
     specific_headers: List[str] = [".*備註.*"],
-    vertical: Union[int, Tuple[int, int]] = [1, 5],
-    horizontal: Union[int, Tuple[int, int]] = [1, 5],
+    vertical: Union[int, Tuple[int, int]] = None,
+    horizontal: Union[int, Tuple[int, int]] = None,
     vertical_count: Union[int, Tuple[int, int]] = [1, 3],
     horizontal_count: Union[int, Tuple[int, int]] = [1, 3],
     skew_angle: Union[int, Tuple[int, int]] = [-5, 5],
