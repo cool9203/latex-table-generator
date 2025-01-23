@@ -283,6 +283,7 @@ def filling_image_to_cell(
     image_paths: List[str],
     image_specific_headers: List[str],
     rng: random.Random = None,
+    raise_not_match_header_exception: bool = False,
 ) -> str:
     logger.debug("Run filling_image_to_cell")
     (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
@@ -292,18 +293,20 @@ def filling_image_to_cell(
     col_names: List[Tuple[int, str, bool]] = list()
     for i, col_name in enumerate(table.columns):
         for specific_header in image_specific_headers:
-            if re.match(specific_header, col_name.replace("状", "狀")):
+            if re.match(specific_header, col_name.replace("状", "狀").replace("圓示", "圖示")):
                 col_names.append((i, col_name))
 
     if not col_names:
-        raise NotColumnMatchError(f"Can not find {image_specific_headers} column name")
+        if raise_not_match_header_exception:
+            raise NotColumnMatchError(f"Can not find {image_specific_headers} column name")
+        return latex_table_str
+    col, col_name = col_names[rng.randint(0, len(col_names) - 1)] if len(col_names) > 1 else col_names[0]
+    logger.debug(f"col: {col}, name: {col_name}")
 
     _image_paths = image_paths.copy()
     rng.shuffle(_image_paths)
     for i in range(len(table)):
         contents = list()
-        col, col_name = col_names[0]
-        logger.debug(f"col: {col}, name: {col_name}")
 
         is_space_row = sum([1 if v else 0 for v in table.iloc[i]]) == 0
 
@@ -755,14 +758,14 @@ def main(
     h_contents: List[str] = ["開口補強"],
     v_contents: List[str] = ["彎鉤", "鋼材筋"],
     vh_contents: List[str] = ["開口補強", "鋼材筋"],
-    specific_headers: List[str] = [".*備註.*"],
+    specific_headers: List[str] = [],
     vertical: Union[int, Tuple[int, int]] = [1, 5],
     horizontal: Union[int, Tuple[int, int]] = [1, 5],
     vertical_count: Union[int, Tuple[int, int]] = [1, 3],
     horizontal_count: Union[int, Tuple[int, int]] = [1, 3],
     skew_angle: Union[int, Tuple[int, int]] = [-5, 5],
     image_paths: List[str] = None,
-    image_specific_headers: List[str] = [".*圖示.*", ".*(?:加工)?[形型][狀式].*"],
+    image_specific_headers: List[str] = [".*圖示.*", ".*(?:加工)?[料形型][型形狀式].*", ".*施工內容.*"],
     css: str = _default_css,
     count: int = 100,
     new_image_size: Tuple[int, int] = (2480, 3508),
