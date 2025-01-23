@@ -6,6 +6,8 @@ import os
 import pprint
 from pathlib import Path
 
+from latex_table_generator.utils import load_render_header_file
+
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
@@ -49,6 +51,8 @@ def arg_parser() -> argparse.Namespace:
         default=[],
         help="Merged horizontal and vertical cell content, will random choice",
     )
+    parser.add_argument("--css", type=str, default=None, help="css file for render latex use")
+    parser.add_argument("--render_headers", type=str, nargs="+", default=None, help="Render header setting")
     parser.add_argument("-s", "--seed", type=str, default=None, help="Random seed")
     parser.add_argument("--log_level", type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR"], default=None, help="Log level")
     parser.add_argument("--specific_headers", type=str, nargs="+", default=[], help="Choice column name to merge")
@@ -126,6 +130,8 @@ if __name__ == "__main__":
         "vh_contents",
         "specific_headers",
         "image_specific_headers",
+        "css",
+        "render_headers",
     ]
     range_arguments = [
         "horizontal",
@@ -137,15 +143,24 @@ if __name__ == "__main__":
         "rows_range",
         "base_image_background_color",
     ]
+    file_path_arguments = [
+        "css",
+        "render_headers",
+    ]
+    split_txt_file_path_arguments = [
+        "h_contents",
+        "v_contents",
+        "vh_contents",
+    ]
 
     # Pre-process arguments
     for check_argument in check_arguments:
-        if not getattr(args, check_argument):
+        if hasattr(args, check_argument) and not getattr(args, check_argument):
             delattr(args, check_argument)
 
     # Process range argument
     for range_argument in range_arguments:
-        arg = getattr(args, range_argument)
+        arg = getattr(args, range_argument, [])
         if len(arg) > 2:
             setattr(args, range_argument, [int(n) for n in arg])
         elif len(arg) == 2:
@@ -159,10 +174,48 @@ if __name__ == "__main__":
         else:
             delattr(args, range_argument)
 
+    # Process file path argument
+    for file_path_argument in file_path_arguments:
+        arg = getattr(args, file_path_argument, None)
+        if arg is not None:
+            if isinstance(arg, str):
+                with Path(arg).open("r", encoding="utf-8") as f:
+                    setattr(args, file_path_argument, f.read())
+            else:
+                contents = list()
+                for arg_element in arg:
+                    path = Path(arg_element)
+                    if not path.exists():  # Normal string
+                        contents.append(arg_element)
+                    elif path.is_file():  # File path
+                        contents.append(load_render_header_file(path=path))
+                    else:  # Folder path
+                        for _path in path.iterdir():
+                            contents.append(load_render_header_file(path=_path))
+                setattr(args, file_path_argument, contents)
+        else:
+            delattr(args, file_path_argument)
+
+    # Process split txt file path argument
+    for split_txt_file_path_argument in split_txt_file_path_arguments:
+        arg = getattr(args, split_txt_file_path_argument, None)
+        if arg is not None:
+            contents = list()
+            for content in arg:
+                if Path(content).exists() and Path(content).is_file():
+                    with Path(content).open("r", encoding="utf-8") as f:
+                        contents += f.read().split("\n")
+                else:
+                    contents.append(content)
+            setattr(args, split_txt_file_path_argument, contents)
+        else:
+            delattr(args, file_path_argument)
+
     args = vars(args)
     print(pprint.pformat(args))
 
-    from latex_table_generator.main import get_subfolder_path, main
+    from latex_table_generator.main import main
+    from latex_table_generator.utils import get_subfolder_path
 
     input_paths = args.pop("input_path")
     if input_paths:

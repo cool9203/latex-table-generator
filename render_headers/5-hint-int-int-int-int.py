@@ -1,0 +1,28 @@
+[
+    {"choices": None, "hashtag": True, "names": ["號數"], "range": [1, 100], "sequence": False, "type": "int"},
+    {
+        "names": [
+            "圖示",
+            "施工內容",
+            "加工形狀",
+            "加工型狀",
+            "加工形式",
+            "加工型式",
+            "形狀",
+            "型狀",
+            "形式",
+            "型式",
+            "料型",
+            "料形",
+        ],
+        "type": "str",
+        "empty": False,
+        "hashtag": False,
+        "sequence": False,
+        "range": None,
+        "choices": None,
+    },
+    {"choices": None, "hashtag": False, "names": ["總長"], "range": [5, 700], "sequence": False, "type": "int"},
+    {"choices": None, "hashtag": False, "names": ["支數"], "range": [3, 208], "sequence": False, "type": "int"},
+    {"choices": None, "hashtag": False, "names": ["重量"], "range": [14, 2740], "sequence": False, "type": "int"},
+]

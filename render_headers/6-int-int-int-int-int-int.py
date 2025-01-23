@@ -1,0 +1,43 @@
+[
+    {
+        "choices": None,
+        "hashtag": False,
+        "names": ["部位"],
+        "range": [1, 100],
+        "sequence": False,
+        "type": "int",
+    },
+    {
+        "choices": None,
+        "hashtag": False,
+        "names": ["長 度", "號數", "長", "長度"],
+        "range": [3, 1100],
+        "sequence": False,
+        "type": "int",
+    },
+    {
+        "choices": None,
+        "hashtag": False,
+        "names": ["數量", "型式", "數"],
+        "range": [2, 355150155],
+        "sequence": False,
+        "type": "int",
+    },
+    {
+        "choices": None,
+        "hashtag": False,
+        "names": ["加工形狀", "長度"],
+        "range": [80, 76601],
+        "sequence": False,
+        "type": "int",
+    },
+    {
+        "choices": None,
+        "hashtag": False,
+        "names": ["重量(Kg)", "重量 Kg", "交數", "支數", "重量 (Kg)"],
+        "range": [1, 18240],
+        "sequence": False,
+        "type": "int",
+    },
+    {"choices": None, "hashtag": False, "names": ["重量", "備註"], "range": [5, 180], "sequence": False, "type": "int"},
+]

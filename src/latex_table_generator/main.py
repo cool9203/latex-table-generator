@@ -1,5 +1,6 @@
 # coding: utf-8
 
+import builtins
 import json
 import logging
 import os
@@ -38,18 +39,19 @@ from latex_table_generator.camelot_base import run_table_detect as run_table_det
 from latex_table_generator.errors import (
     ImagePasteError,
     NotColumnMatchError,
-    NotLatexError,
-    NotSupportMulticolumnLatexError,
-    NotSupportMulticolumnLatexTableError,
 )
 from latex_table_generator.generate_steel import load_image
 from latex_table_generator.image2table import run_table_detect as run_table_detect_img2table
+from latex_table_generator.utils import (
+    convert_latex_table_to_pandas,
+    pre_check_latex_table_string,
+    preprocess_latex_table_string,
+)
 
 _image_extensions = {ex for ex, f in PILImage.registered_extensions().items() if f in PILImage.OPEN}
 _support_merge_methods = ["horizontal", "vertical", "hybrid", "none"]
 _latex_includegraphics_pattern = r"\\includegraphics{(.*.(?:jpg|png|JPG|PNG))}"
-_latex_table_begin_pattern = r"\\begin{tabular}{.*}"
-_latex_table_end_pattern = r"\\end{tabular}"
+
 _default_css = r"""<style>
     table,
     th,
@@ -71,7 +73,7 @@ _default_css = r"""<style>
         padding-right: {padding}rem;
     }}
 </style>"""
-_random_headers = [
+_default_random_headers = [
     [
         {"names": ["編號", "#"], "type": int, "empty": False, "hashtag": False, "sequence": True, "range": None, "choices": None},
         {
@@ -159,39 +161,6 @@ if Version(pypandoc.get_pandoc_version()) < Version("3.1.2"):
     )
 
 
-def get_subfolder_path(
-    path: PathLike,
-    targets: Sequence[Union[str, Sequence[str]]] = (
-        ("*.jpg", "*.png"),
-        ("*.txt"),
-    ),
-) -> List[Path]:
-    subfolder_paths = list()
-    find_paths = [path]
-    while find_paths:
-        find_path = Path(find_paths.pop(0))
-        logger.debug(f"get_subfolder_path: Search {find_path!s}")
-
-        status = [False for _ in range(len(targets))]
-        for i, target in enumerate(targets):
-            if isinstance(target, str):
-                if [p for p in Path(find_path).glob(target)]:
-                    status[i] = True
-            else:
-                for _target in target:
-                    if [p for p in Path(find_path).glob(_target)]:
-                        status[i] = True
-
-        if np.array(status).all():
-            subfolder_paths.append(find_path)
-
-        for folder in find_path.iterdir():
-            if folder.is_dir():
-                logger.debug(f"get_subfolder_path: Add {folder!s}")
-                find_paths.append(folder)
-    return subfolder_paths
-
-
 def convert_latex_table_to_markdown(
     src: str,
 ) -> List[str]:
@@ -200,62 +169,6 @@ def convert_latex_table_to_markdown(
         dfs = pd.read_html(f)
 
     return [df.to_markdown(index=False).replace("nan", "   ") for df in dfs]
-
-
-def preprocess_latex_table_string(
-    latex_table_str: str,
-) -> str:
-    processed_latex_table_str = re.sub(_latex_table_begin_pattern, "", latex_table_str)
-    processed_latex_table_str = re.sub(_latex_table_end_pattern, "", processed_latex_table_str)
-    processed_latex_table_str = processed_latex_table_str.replace("\n", " ").strip()
-
-    # Filter multi \hline error
-    rows = processed_latex_table_str.split(r"\\")
-    new_rows = list()
-    for row in rows:
-        _row = row
-        if row.count(r"\hline") > 1:
-            _row = _row.replace(r"\hline", "").strip()
-            _row = rf"\hline {_row}"
-        new_rows.append(_row)
-
-    return "\\\\\n".join(new_rows)
-
-
-def pre_check_latex_table_string(
-    latex_table_str: str,
-) -> Tuple[str, str]:
-    results = re.findall(_latex_table_begin_pattern, latex_table_str)
-    if not results:
-        raise NotLatexError("Not latex table")
-    elif "multicolumn" in latex_table_str:
-        raise NotSupportMulticolumnLatexError("Not support convert have multicolumn latex")
-    elif len(results) > 1:
-        raise NotSupportMulticolumnLatexTableError("Not support convert have latex table")
-
-    begin_str = results[0]
-    end_str = r"\end{tabular}"
-    return (begin_str, end_str)
-
-
-def convert_latex_table_to_pandas(
-    latex_table_str: str,
-    headers: Union[bool, Sequence[str], None] = None,
-) -> pd.DataFrame:
-    processed_latex_table_str = preprocess_latex_table_string(latex_table_str)
-    rows = [row.strip() for row in processed_latex_table_str.split(r"\\") if "&" in row]  # 過濾掉無關的行
-
-    # 拆分表格各儲存格
-    table_data = [row.replace(r"\\", "").replace(r"\hline", "").strip().split("&") for row in rows]
-    cleaned_data = [[cell.strip() for cell in row] for row in table_data]
-
-    if isinstance(headers, bool) and headers:
-        headers = cleaned_data[0]  # 第一行是列名
-        data = cleaned_data[1:]  # 剩餘的是數據
-        df = pd.DataFrame(data, columns=headers)
-    elif headers:
-        df = pd.DataFrame(cleaned_data)
-    return df
 
 
 def random_generate_latex_table_string(
@@ -285,12 +198,12 @@ def random_generate_latex_table_string(
                 values.append("")
             else:
                 _type = header.get("type")
-                _empty = header.get("empty", True)
+                _empty = header.get("empty", False)
                 _hashtag = header.get("hashtag", False)
                 _sequence = header.get("sequence", False)
                 _range = header.get("range", None)
                 _choices = header.get("choices", None)
-                _type = getattr(__builtins__, _type) if isinstance(_type, str) else _type  # Get type class, ex: <class 'int'>
+                _type = getattr(builtins, _type) if isinstance(_type, str) else _type  # Get type class, ex: <class 'int'>
 
                 value = None
                 if isinstance(_empty, bool) and _empty and rng.randint(0, 1) == 1:
@@ -371,6 +284,7 @@ def filling_image_to_cell(
     image_paths: List[str],
     image_specific_headers: List[str],
     rng: random.Random = None,
+    raise_not_match_header_exception: bool = False,
 ) -> str:
     logger.debug("Run filling_image_to_cell")
     (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
@@ -380,18 +294,20 @@ def filling_image_to_cell(
     col_names: List[Tuple[int, str, bool]] = list()
     for i, col_name in enumerate(table.columns):
         for specific_header in image_specific_headers:
-            if re.match(specific_header, col_name.replace("状", "狀")):
+            if re.match(specific_header, col_name.replace("状", "狀").replace("圓示", "圖示")):
                 col_names.append((i, col_name))
 
     if not col_names:
-        raise NotColumnMatchError(f"Can not find {image_specific_headers} column name")
+        if raise_not_match_header_exception:
+            raise NotColumnMatchError(f"Can not find {image_specific_headers} column name")
+        return latex_table_str
+    col, col_name = col_names[rng.randint(0, len(col_names) - 1)] if len(col_names) > 1 else col_names[0]
+    logger.debug(f"col: {col}, name: {col_name}")
 
     _image_paths = image_paths.copy()
     rng.shuffle(_image_paths)
     for i in range(len(table)):
         contents = list()
-        col, col_name = col_names[0]
-        logger.debug(f"col: {col}, name: {col_name}")
 
         is_space_row = sum([1 if v else 0 for v in table.iloc[i]]) == 0
 
@@ -906,15 +822,16 @@ def main(
     h_contents: List[str] = ["開口補強"],
     v_contents: List[str] = ["彎鉤", "鋼材筋"],
     vh_contents: List[str] = ["開口補強", "鋼材筋"],
-    specific_headers: List[str] = [".*備註.*"],
+    specific_headers: List[str] = [],
     vertical: Union[int, Tuple[int, int]] = None,
     horizontal: Union[int, Tuple[int, int]] = None,
     vertical_count: Union[int, Tuple[int, int]] = [1, 3],
     horizontal_count: Union[int, Tuple[int, int]] = [1, 3],
     skew_angle: Union[int, Tuple[int, int]] = [-5, 5],
     image_paths: List[str] = None,
-    image_specific_headers: List[str] = [".*圖示.*", ".*(?:加工)?[形型][狀式].*"],
+    image_specific_headers: List[str] = [".*圖示.*", ".*(?:加工)?[料形型][型形狀式].*", ".*施工內容.*"],
     css: str = _default_css,
+    render_headers: List[List[Dict[str, Any]]] = _default_random_headers,
     count: int = 100,
     new_image_size: Tuple[int, int] = (2480, 3508),
     min_crop_size: Union[float, int] = None,
@@ -941,6 +858,9 @@ def main(
     rng = random.Random(kwds.get("seed", os.environ.get("SEED", None)))
     logger.setLevel(kwds.get("log_level", os.environ.get("LOG_LEVEL", "INFO")))
     full_random_generate = False
+
+    if "<style>" not in css and "</style>" not in css:
+        css = f"<style>\n{css}\n</style>"
 
     # Create iter_data
     if input_path and Path(input_path).exists():
@@ -1005,7 +925,9 @@ def main(
             file_image = get_image(src=file_image)
             latex_table_strs = [
                 random_generate_latex_table_string(
-                    headers=_random_headers[0],
+                    headers=(
+                        render_headers[rng.randint(0, len(render_headers) - 1)] if len(render_headers) > 1 else render_headers[0]
+                    ),
                     rows_range=rows_range,
                     add_space_row_percentage=add_space_row_percentage,
                     rng=rng,
