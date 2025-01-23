@@ -1,4 +1,4 @@
-SEED=99 LOG_LEVEL=INFO \
+LOG_LEVEL=INFO \
     uv run src/latex_table_generator \
     --input_path \
         /mnt/c/Users/ychsu/Downloads/沛波標記data/要標記資料/20241213_需Label鋼材Data/單一正規 \

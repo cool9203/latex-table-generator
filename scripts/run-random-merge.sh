@@ -1,4 +1,4 @@
-SEED=99 LOG_LEVEL=INFO \
+LOG_LEVEL=INFO \
     uv run src/latex_table_generator \
     --count 100 \
     --output_path ./outputs/full-random-merge \
