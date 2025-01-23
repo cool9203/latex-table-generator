@@ -6,6 +6,7 @@ SEED=99 LOG_LEVEL=INFO \
     --h_contents "./contents.txt" \
     --vh_contents "./contents.txt" \
     --image_path "./steels" \
+    --css "./css.txt" \
     --render_headers "./render_headers" \
     --horizontal_count 1 3 \
     --vertical_count 1 3 \

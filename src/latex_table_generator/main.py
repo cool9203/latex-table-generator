@@ -790,6 +790,9 @@ def main(
     logger.setLevel(kwds.get("log_level", os.environ.get("LOG_LEVEL", "INFO")))
     full_random_generate = False
 
+    if "<style>" not in css and "</style>" not in css:
+        css = f"<style>\n{css}\n</style>"
+
     # Create iter_data
     if input_path and Path(input_path).exists():
         iter_data = [d for d in Path(input_path).glob(r"*.txt")]

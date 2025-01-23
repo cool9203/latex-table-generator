@@ -51,6 +51,7 @@ def arg_parser() -> argparse.Namespace:
         default=[],
         help="Merged horizontal and vertical cell content, will random choice",
     )
+    parser.add_argument("--css", type=str, default=None, help="css file for render latex use")
     parser.add_argument("--render_headers", type=str, nargs="+", default=None, help="Render header setting")
     parser.add_argument("-s", "--seed", type=str, default=None, help="Random seed")
     parser.add_argument("--log_level", type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR"], default=None, help="Log level")
@@ -121,6 +122,7 @@ if __name__ == "__main__":
         "vh_contents",
         "specific_headers",
         "image_specific_headers",
+        "css",
         "render_headers",
     ]
     range_arguments = [
@@ -132,6 +134,7 @@ if __name__ == "__main__":
         "rows_range",
     ]
     file_path_arguments = [
+        "css",
         "render_headers",
     ]
     split_txt_file_path_arguments = [
