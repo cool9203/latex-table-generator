@@ -1,10 +1,12 @@
 # coding: utf-8
 
+import ast
+import json
 import logging
 import re
 from os import PathLike
 from pathlib import Path
-from typing import List, Sequence, Tuple, Union
+from typing import Any, List, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -115,3 +117,21 @@ def convert_latex_table_to_pandas(
     except ValueError as e:
         raise NotSupportLatexError("Not support this latex") from e
     return df
+
+
+def load_render_header_file(
+    path: PathLike,
+) -> Any:
+    path = Path(path)
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            content = f.read()
+            if path.suffix in [".py"]:
+                content = ast.literal_eval(content)
+            elif path.suffix in [".json"]:
+                content = json.loads(content)
+    except ValueError as e:
+        if "malformed node or string" in str(e):
+            raise ValueError("Type need be string of type, not direct pass type class") from e
+        raise e
+    return content

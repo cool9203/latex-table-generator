@@ -1,0 +1,26 @@
+[
+    {"choices": None, "hashtag": True, "names": ["號數"], "range": [1, 100], "sequence": False, "type": "int"},
+    {
+        "choices": [
+            "版錨定筋",
+            "下層筋",
+            "上下層板",
+            "地坪",
+            "上層筋",
+            "小馬(立體)尾端請壓低",
+            "定",
+            "B棟後方",
+            "工作筋",
+            "受電室",
+            "獨立基腳",
+        ],
+        "hashtag": False,
+        "names": ["料型"],
+        "range": None,
+        "sequence": False,
+        "type": "str",
+    },
+    {"choices": None, "hashtag": False, "names": ["總長"], "range": [80, 1200], "sequence": False, "type": "int"},
+    {"choices": None, "hashtag": False, "names": ["支數"], "range": [16, 4580], "sequence": False, "type": "int"},
+    {"choices": None, "hashtag": False, "names": ["重量"], "range": [21, 54630], "sequence": False, "type": "int"},
+]

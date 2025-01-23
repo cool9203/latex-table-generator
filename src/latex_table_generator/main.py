@@ -73,7 +73,7 @@ _default_css = r"""<style>
         padding-right: {padding}rem;
     }}
 </style>"""
-_random_headers = [
+_default_random_headers = [
     [
         {"names": ["編號", "#"], "type": int, "empty": False, "hashtag": False, "sequence": True, "range": None, "choices": None},
         {
@@ -768,6 +768,7 @@ def main(
     image_paths: List[str] = None,
     image_specific_headers: List[str] = [".*圖示.*", ".*(?:加工)?[料形型][型形狀式].*", ".*施工內容.*"],
     css: str = _default_css,
+    render_headers: List[List[Dict[str, Any]]] = _default_random_headers,
     count: int = 100,
     new_image_size: Tuple[int, int] = (2480, 3508),
     min_crop_size: Union[float, int] = None,
@@ -852,7 +853,9 @@ def main(
             file_image = get_image(src=file_image)
             latex_table_strs = [
                 random_generate_latex_table_string(
-                    headers=_random_headers[0],
+                    headers=(
+                        render_headers[rng.randint(0, len(render_headers) - 1)] if len(render_headers) > 1 else render_headers[0]
+                    ),
                     rows_range=rows_range,
                     add_space_row_percentage=add_space_row_percentage,
                     rng=rng,
