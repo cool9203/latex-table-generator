@@ -295,26 +295,33 @@ def filling_image_to_cell(
     for i, col_name in enumerate(table.columns):
         for specific_header in image_specific_headers:
             if re.match(specific_header, col_name.replace("状", "狀").replace("圓示", "圖示")):
-                col_names.append((i, col_name))
+                col_names.append(([i], [col_name]))
 
     if not col_names:
         if raise_not_match_header_exception:
             raise NotColumnMatchError(f"Can not find {image_specific_headers} column name")
         return latex_table_str
-    col, col_name = col_names[rng.randint(0, len(col_names) - 1)] if len(col_names) > 1 else col_names[0]
+
+    (col, col_name) = ([], [])
+    for epoch in range(2 if len(table.columns) >= 10 and len(col_names) > 1 else 1):
+        _col_name_element = col_names[epoch * len(col_names) // 2]
+        col += _col_name_element[0]
+        col_name += _col_name_element[1]
     logger.debug(f"col: {col}, name: {col_name}")
 
     _image_paths = image_paths.copy()
     rng.shuffle(_image_paths)
+    index = 0
     for i in range(len(table)):
         contents = list()
 
         is_space_row = sum([1 if v else 0 for v in table.iloc[i]]) == 0
 
         for j, v in enumerate(table.iloc[i]):  # 紀錄 cell 內容
-            if j == col and not is_space_row:  # 若是是要替換 image 的欄位
-                index = i % len(_image_paths)
+            if j in col and not is_space_row:  # 若是是要替換 image 的欄位
                 contents.append(rf"\includegraphics{{{image_paths[index]}}}")
+                index += 1
+                index = index % len(image_paths)
             else:
                 contents.append(v)
         contents_str = " & ".join(contents)
@@ -896,243 +903,251 @@ def main(
             output_path_table_info.mkdir(exist_ok=True, parents=True)
 
     for index, filename in enumerate(iter_data):
-        if multi_table_paste_vertical in ["random"]:
-            paste_vertical = rng.randint(0, 1) == 1
-        elif multi_table_paste_vertical in ["always", "none"]:
-            paste_vertical = multi_table_paste_vertical == "always"
-        else:
-            raise ValueError("multi_table_paste_vertical value error, should be choice from ['random', 'always', 'none']")
-
-        # Get file_image and latex_table_str
-        if not full_random_generate:
-            if Path(input_path, f"{filename.stem}.jpg").exists():
-                file_image = PILImage.open(Path(input_path, f"{filename.stem}.jpg"))
-            elif Path(input_path, f"{filename.stem}.png").exists():
-                file_image = PILImage.open(Path(input_path, f"{filename.stem}.png"))
+        while True:
+            if multi_table_paste_vertical in ["random"]:
+                paste_vertical = rng.randint(0, 1) == 1
+            elif multi_table_paste_vertical in ["always", "none"]:
+                paste_vertical = multi_table_paste_vertical == "always"
             else:
-                logger.info(f"Not found {filename}.jpg or {filename}.png, skip file")
-                continue
-            file_image = get_image(src=file_image)
-            (file_image, _) = fix_rotation_image(img=file_image)
+                raise ValueError("multi_table_paste_vertical value error, should be choice from ['random', 'always', 'none']")
 
-            logger.info(f"Run [{index+1}/{len(iter_data)}] {filename.name}") if not tqdm else None
-
-            with filename.open("r", encoding="utf-8") as f:
-                latex_table_str = f.read()
-                latex_table_strs = [latex_table_str for _ in range(multi_table if multi_table else 1)]
-        else:
-            file_image = PILImage.new(mode="RGB", size=new_image_size, color=base_image_background_color)
-            file_image = get_image(src=file_image)
-            latex_table_strs = [
-                random_generate_latex_table_string(
-                    headers=(
-                        render_headers[rng.randint(0, len(render_headers) - 1)] if len(render_headers) > 1 else render_headers[0]
-                    ),
-                    rows_range=rows_range,
-                    add_space_row_percentage=add_space_row_percentage,
-                    rng=rng,
-                )
-                for _ in range(multi_table if multi_table else 1)
-            ]
-            logger.info(f"Run [{index+1}/{len(iter_data)}]") if not tqdm else None
-        logger.debug(f"latex_table_strs: {latex_table_strs}")
-
-        try:
-            with TemporaryDirectory(prefix="steel_temp") as steel_temp_dir:
-                base_images = load_image(
-                    image_paths,
-                    extensions=_image_extensions,
-                    rng=rng,
-                )
-
-                # Random generate steel
-                generate_images = list()
-                for _ in range(rows_range[1]):
-                    generate_data = base_images[rng.randint(0, len(base_images) - 1)].generate(rng=rng)
-                    name = str(uuid4())
-                    generate_image_path = Path(steel_temp_dir, f"{name}.jpg")
-                    generate_image = generate_data[0].convert("RGB")
-                    generate_image = image_resize(src=generate_image, size=image_size)
-                    generate_image.save(generate_image_path, quality=100)
-                    generate_images.append(str(generate_image_path.resolve()))
-
-                    generate_label_path = Path(steel_temp_dir, f"{name}.txt")
-                    with generate_label_path.open("w", encoding="utf-8") as f:
-                        f.write(generate_data[1])
-
-                # Fill image
-                latex_table_strs = [
-                    filling_image_to_cell(
-                        latex_table_str=latex_table_str,
-                        rng=rng,
-                        image_paths=generate_images,
-                        image_specific_headers=image_specific_headers,
-                    )
-                    for latex_table_str in latex_table_strs
-                ]
-
-                # Dropout table cell content
-                latex_table_strs = [
-                    dropout_table_content(
-                        latex_table_str=latex_table_str,
-                        rng=rng,
-                        dropout_percentage=dropout_percentage,
-                    )
-                    for latex_table_str in latex_table_strs
-                ]
-
-                latex_table_merged_strs = [
-                    merge_cell(
-                        latex_table_str=latex_table_str,
-                        merge_methods=merge_methods,
-                        h_contents=h_contents,
-                        v_contents=v_contents,
-                        vh_contents=vh_contents,
-                        specific_headers=specific_headers,
-                        vertical=vertical,
-                        horizontal=horizontal,
-                        vertical_count=vertical_count,
-                        horizontal_count=horizontal_count,
-                        latex_merge_use_special_content=latex_merge_use_special_content,
-                        rng=rng,
-                    )
-                    for latex_table_str in latex_table_strs
-                ]
-
-                logger.debug(latex_table_merged_strs)
-
-                # Get table position
-                if not full_random_generate:
-                    tables = run_table_detect_camelot(file_image)
-                    tables = run_table_detect_img2table(file_image) if not tables else tables
+            # Get file_image and latex_table_str
+            if not full_random_generate:
+                if Path(input_path, f"{filename.stem}.jpg").exists():
+                    file_image = PILImage.open(Path(input_path, f"{filename.stem}.jpg"))
+                elif Path(input_path, f"{filename.stem}.png").exists():
+                    file_image = PILImage.open(Path(input_path, f"{filename.stem}.png"))
                 else:
-                    tables = run_random_crop_rectangle(file_image, min_crop_size=min_crop_size, rng=rng)
+                    logger.info(f"Not found {filename}.jpg or {filename}.png, skip file")
+                    continue
+                file_image = get_image(src=file_image)
+                (file_image, _) = fix_rotation_image(img=file_image)
 
-                if tables:
-                    [  # Check merged latex table is correct
-                        convert_latex_table_to_pandas(
-                            latex_table_str=latex_table_merged_str[1],
-                            headers=True,
+                logger.info(f"Run [{index+1}/{len(iter_data)}] {filename.name}") if not tqdm else None
+
+                with filename.open("r", encoding="utf-8") as f:
+                    latex_table_str = f.read()
+                    latex_table_strs = [latex_table_str for _ in range(multi_table if multi_table else 1)]
+            else:
+                file_image = PILImage.new(mode="RGB", size=new_image_size, color=base_image_background_color)
+                file_image = get_image(src=file_image)
+                latex_table_strs = [
+                    random_generate_latex_table_string(
+                        headers=(
+                            render_headers[rng.randint(0, len(render_headers) - 1)]
+                            if len(render_headers) > 1
+                            else render_headers[0]
+                        ),
+                        rows_range=rows_range,
+                        add_space_row_percentage=add_space_row_percentage,
+                        rng=rng,
+                    )
+                    for _ in range(multi_table if multi_table else 1)
+                ]
+                logger.info(f"Run [{index+1}/{len(iter_data)}]") if not tqdm else None
+            logger.debug(f"latex_table_strs: {latex_table_strs}")
+
+            try:
+                with TemporaryDirectory(prefix="steel_temp") as steel_temp_dir:
+                    base_images = load_image(
+                        image_paths,
+                        extensions=_image_extensions,
+                        rng=rng,
+                    )
+
+                    # Random generate steel
+                    generate_images = list()
+                    for _ in range(rows_range[1] * 2):
+                        generate_data = base_images[rng.randint(0, len(base_images) - 1)].generate(rng=rng)
+                        name = str(uuid4())
+                        generate_image_path = Path(steel_temp_dir, f"{name}.jpg")
+                        generate_image = generate_data[0].convert("RGB")
+                        generate_image = image_resize(src=generate_image, size=image_size)
+                        generate_image.save(generate_image_path, quality=100)
+                        generate_images.append(str(generate_image_path.resolve()))
+
+                        generate_label_path = Path(steel_temp_dir, f"{name}.txt")
+                        with generate_label_path.open("w", encoding="utf-8") as f:
+                            f.write(generate_data[1])
+
+                    # Fill image
+                    latex_table_strs = [
+                        filling_image_to_cell(
+                            latex_table_str=latex_table_str,
+                            rng=rng,
+                            image_paths=generate_images,
+                            image_specific_headers=image_specific_headers,
                         )
-                        for latex_table_merged_str in latex_table_merged_strs
+                        for latex_table_str in latex_table_strs
                     ]
-                    hollow_image = draw_table_bbox(
-                        src=file_image,
-                        tables=tables,
-                        margin=5,
-                        color=base_image_background_color,
-                    )
 
-                    _skew_angle = (
-                        skew_angle if isinstance(skew_angle, (int, float)) else rng.uniform(skew_angle[0], skew_angle[1])
-                    )
-                    (final_image, table_positions) = paste_fit_size_latex_table_to_image(
-                        latex_table_strs=[latex_table_merged_str[0] for latex_table_merged_str in latex_table_merged_strs],
-                        file_image=hollow_image,
-                        position=(tables[0].bbox.x1, tables[0].bbox.y1, tables[0].bbox.x2, tables[0].bbox.y2),
-                        css=css,
-                        skew_angle=_skew_angle,
-                        paste_vertical=paste_vertical,
-                    )
-                    if final_image is None:
-                        raise ImagePasteError("Can't paste image")
+                    # Dropout table cell content
+                    latex_table_strs = [
+                        dropout_table_content(
+                            latex_table_str=latex_table_str,
+                            rng=rng,
+                            dropout_percentage=dropout_percentage,
+                        )
+                        for latex_table_str in latex_table_strs
+                    ]
 
-                    # Convert image to label
-                    latex_table_image_results = [latex_table_merged_str[0] for latex_table_merged_str in latex_table_merged_strs]
-                    latex_table_label_results = [latex_table_merged_str[1] for latex_table_merged_str in latex_table_merged_strs]
-                    for i in range(len(latex_table_image_results)):
-                        for r in re.finditer(_latex_includegraphics_pattern, latex_table_image_results[i]):
-                            path = Path(str(r.group(1)))
-                            with Path(path.parent.resolve(), path.stem + ".txt").open("r", encoding="utf-8") as f:
-                                label = f.read()
-                            latex_table_image_results[i] = re.sub(
-                                str(r.group(0)).replace("\\", "\\\\"), label, latex_table_image_results[i]
-                            )
-                    for i in range(len(latex_table_label_results)):
-                        for r in re.finditer(_latex_includegraphics_pattern, latex_table_label_results[i]):
-                            path = Path(str(r.group(1)))
-                            with Path(path.parent.resolve(), path.stem + ".txt").open("r", encoding="utf-8") as f:
-                                label = f.read()
-                            latex_table_label_results[i] = re.sub(
-                                str(r.group(0)).replace("\\", "\\\\"), label, latex_table_label_results[i]
-                            )
+                    latex_table_merged_strs = [
+                        merge_cell(
+                            latex_table_str=latex_table_str,
+                            merge_methods=merge_methods,
+                            h_contents=h_contents,
+                            v_contents=v_contents,
+                            vh_contents=vh_contents,
+                            specific_headers=specific_headers,
+                            vertical=vertical,
+                            horizontal=horizontal,
+                            vertical_count=vertical_count,
+                            horizontal_count=horizontal_count,
+                            latex_merge_use_special_content=latex_merge_use_special_content,
+                            rng=rng,
+                        )
+                        for latex_table_str in latex_table_strs
+                    ]
 
-                    # Save label
-                    table_info = json.dumps(
-                        {
-                            "positions": table_positions,
-                            "skew_angle": _skew_angle,
-                        }
-                    )
-                    if format & {"markdown", "latex", "table_info"} and len(format) == 1:
-                        plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
-                        with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
-                            if "markdown" in format:
-                                markdown_tables = list()
-                                for latex_table_result in latex_table_label_results:
-                                    markdown_tables.append(convert_latex_table_to_markdown(src=latex_table_result)[0])
-                                f.write("\n\n".join(markdown_tables))
+                    logger.debug(latex_table_merged_strs)
 
-                            elif "latex" in format:
-                                if latex_label_cell_merge:
-                                    f.write("\n".join(latex_table_image_results))
-                                else:
-                                    f.write("\n".join(latex_table_label_results))
-
-                            elif "html" in format:
-                                html_tables = list()
-                                for latex_table_result in (
-                                    latex_table_image_results if html_label_cell_merge else latex_table_label_results
-                                ):
-                                    html_tables.append(pypandoc.convert_text(latex_table_result, "html", format="latex"))
-                                f.write("\n".join(html_tables))
-
-                            elif "table_info" in format:
-                                f.write(table_info)
-                            else:
-                                raise ValueError(f"format value error, got unknown format: {format}")
-                    elif format & {"all"} or len(format) > 1:
-                        # Save image
-                        plt.imsave(Path(output_path_images, filename.stem + ".jpg"), final_image)
-
-                        # Save latex
-                        if "all" in format or "latex" in format:
-                            with Path(output_path_latex, filename.stem + ".txt").open("w", encoding="utf-8") as f:
-                                if latex_label_cell_merge:
-                                    f.write("\n".join(latex_table_image_results))
-                                else:
-                                    f.write("\n".join(latex_table_label_results))
-
-                        # Save markdown
-                        if "all" in format or "markdown" in format:
-                            with Path(output_path_markdown, filename.stem + ".txt").open("w", encoding="utf-8") as f:
-                                markdown_tables = list()
-                                for latex_table_result in latex_table_label_results:
-                                    markdown_tables.append(convert_latex_table_to_markdown(src=latex_table_result)[0])
-                                f.write("\n\n".join(markdown_tables))
-
-                        # Save html
-                        if "all" in format or "html" in format:
-                            with Path(output_path_html, filename.stem + ".txt").open("w", encoding="utf-8") as f:
-                                html_tables = list()
-                                for latex_table_result in (
-                                    latex_table_image_results if html_label_cell_merge else latex_table_label_results
-                                ):
-                                    html_tables.append(pypandoc.convert_text(latex_table_result, "html", format="latex"))
-                                f.write("\n".join(html_tables))
-
-                        # Save table position
-                        if "all" in format or "table_info" in format:
-                            with Path(output_path_table_info, filename.stem + ".txt").open("w", encoding="utf-8") as f:
-                                f.write(table_info)
+                    # Get table position
+                    if not full_random_generate:
+                        tables = run_table_detect_camelot(file_image)
+                        tables = run_table_detect_img2table(file_image) if not tables else tables
                     else:
-                        raise ValueError(f"format value error, got unknown format: {format}")
+                        tables = run_random_crop_rectangle(file_image, min_crop_size=min_crop_size, rng=rng)
 
-                else:
-                    logger.info(f"Not detect table, so skip {filename.name}")
-        except Exception as e:
-            logger.exception(e)
-            logger.error(f"{filename.name} have error")
+                    if tables:
+                        [  # Check merged latex table is correct
+                            convert_latex_table_to_pandas(
+                                latex_table_str=latex_table_merged_str[1],
+                                headers=True,
+                            )
+                            for latex_table_merged_str in latex_table_merged_strs
+                        ]
+                        hollow_image = draw_table_bbox(
+                            src=file_image,
+                            tables=tables,
+                            margin=5,
+                            color=base_image_background_color,
+                        )
+
+                        _skew_angle = (
+                            skew_angle if isinstance(skew_angle, (int, float)) else rng.uniform(skew_angle[0], skew_angle[1])
+                        )
+                        (final_image, table_positions) = paste_fit_size_latex_table_to_image(
+                            latex_table_strs=[latex_table_merged_str[0] for latex_table_merged_str in latex_table_merged_strs],
+                            file_image=hollow_image,
+                            position=(tables[0].bbox.x1, tables[0].bbox.y1, tables[0].bbox.x2, tables[0].bbox.y2),
+                            css=css,
+                            skew_angle=_skew_angle,
+                            paste_vertical=paste_vertical,
+                        )
+                        if final_image is None:
+                            raise ImagePasteError("Can't paste image")
+
+                        # Convert image to label
+                        latex_table_image_results = [
+                            latex_table_merged_str[0] for latex_table_merged_str in latex_table_merged_strs
+                        ]
+                        latex_table_label_results = [
+                            latex_table_merged_str[1] for latex_table_merged_str in latex_table_merged_strs
+                        ]
+                        for i in range(len(latex_table_image_results)):
+                            for r in re.finditer(_latex_includegraphics_pattern, latex_table_image_results[i]):
+                                path = Path(str(r.group(1)))
+                                with Path(path.parent.resolve(), path.stem + ".txt").open("r", encoding="utf-8") as f:
+                                    label = f.read()
+                                latex_table_image_results[i] = re.sub(
+                                    str(r.group(0)).replace("\\", "\\\\"), label, latex_table_image_results[i]
+                                )
+                        for i in range(len(latex_table_label_results)):
+                            for r in re.finditer(_latex_includegraphics_pattern, latex_table_label_results[i]):
+                                path = Path(str(r.group(1)))
+                                with Path(path.parent.resolve(), path.stem + ".txt").open("r", encoding="utf-8") as f:
+                                    label = f.read()
+                                latex_table_label_results[i] = re.sub(
+                                    str(r.group(0)).replace("\\", "\\\\"), label, latex_table_label_results[i]
+                                )
+
+                        # Save label
+                        table_info = json.dumps(
+                            {
+                                "positions": table_positions,
+                                "skew_angle": _skew_angle,
+                            }
+                        )
+                        if format & {"markdown", "latex", "table_info"} and len(format) == 1:
+                            plt.imsave(Path(output_path, filename.stem + ".jpg"), final_image)
+                            with Path(output_path, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                                if "markdown" in format:
+                                    markdown_tables = list()
+                                    for latex_table_result in latex_table_label_results:
+                                        markdown_tables.append(convert_latex_table_to_markdown(src=latex_table_result)[0])
+                                    f.write("\n\n".join(markdown_tables))
+
+                                elif "latex" in format:
+                                    if latex_label_cell_merge:
+                                        f.write("\n".join(latex_table_image_results))
+                                    else:
+                                        f.write("\n".join(latex_table_label_results))
+
+                                elif "html" in format:
+                                    html_tables = list()
+                                    for latex_table_result in (
+                                        latex_table_image_results if html_label_cell_merge else latex_table_label_results
+                                    ):
+                                        html_tables.append(pypandoc.convert_text(latex_table_result, "html", format="latex"))
+                                    f.write("\n".join(html_tables))
+
+                                elif "table_info" in format:
+                                    f.write(table_info)
+                                else:
+                                    raise ValueError(f"format value error, got unknown format: {format}")
+                        elif format & {"all"} or len(format) > 1:
+                            # Save image
+                            plt.imsave(Path(output_path_images, filename.stem + ".jpg"), final_image)
+
+                            # Save latex
+                            if "all" in format or "latex" in format:
+                                with Path(output_path_latex, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                                    if latex_label_cell_merge:
+                                        f.write("\n".join(latex_table_image_results))
+                                    else:
+                                        f.write("\n".join(latex_table_label_results))
+
+                            # Save markdown
+                            if "all" in format or "markdown" in format:
+                                with Path(output_path_markdown, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                                    markdown_tables = list()
+                                    for latex_table_result in latex_table_label_results:
+                                        markdown_tables.append(convert_latex_table_to_markdown(src=latex_table_result)[0])
+                                    f.write("\n\n".join(markdown_tables))
+
+                            # Save html
+                            if "all" in format or "html" in format:
+                                with Path(output_path_html, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                                    html_tables = list()
+                                    for latex_table_result in (
+                                        latex_table_image_results if html_label_cell_merge else latex_table_label_results
+                                    ):
+                                        html_tables.append(pypandoc.convert_text(latex_table_result, "html", format="latex"))
+                                    f.write("\n".join(html_tables))
+
+                            # Save table position
+                            if "all" in format or "table_info" in format:
+                                with Path(output_path_table_info, filename.stem + ".txt").open("w", encoding="utf-8") as f:
+                                    f.write(table_info)
+                        else:
+                            raise ValueError(f"format value error, got unknown format: {format}")
+                        break
+                    else:
+                        logger.info(f"Not detect table, so skip {filename.name}")
+            except Exception as e:
+                pass
+                # logger.exception(e)
+                # logger.error(f"{filename.name} have error")
 
 
 if __name__ == "__main__":
