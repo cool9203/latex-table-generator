@@ -29,7 +29,10 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("--format", type=str, choices=["latex", "markdown", "str"], required=True, help="Output text format")
     parser.add_argument("--folder_name", type=str, default=None, help="Check folder name")
     parser.add_argument("--output_name", type=str, default="data", help="Output filename")
-    parser.add_argument("--copy_image", action="store_true", help="Output filename")
+    parser.add_argument("--copy_image", action="store_true", help="Copy image to output path")
+    parser.add_argument(
+        "--not_pre_check_label", dest="pre_check_label", action="store_false", help="Pre-check label is correct format"
+    )
 
     parser.add_argument("--tqdm", action="store_true", help="Show progress bar")
 
@@ -119,6 +122,7 @@ def convert_got_ocr_dataset_from_tmpco(
     format: str,
     image_root_path: str,
     copy_image: bool = False,
+    pre_check_label: bool = True,
     tqdm: bool = False,
 ) -> pd.DataFrame:
     # Pre-check
@@ -159,16 +163,17 @@ def convert_got_ocr_dataset_from_tmpco(
     iter_length = TQDM.tqdm(range(len(df))) if tqdm else range(len(df))
 
     # Pre-check output text format
-    logger.info("Pre-check output text format")
-    for i in iter_length:
-        if format in ["latex", "markdown"]:
-            text = pypandoc.convert_text(df.iloc[i]["label"], to="html", format=format)
-            if "<table>" not in text:
-                raise ValueError(f"format error: incorrect {format}")
-        elif format in ["str"]:
-            pass
-        else:
-            raise ValueError("format error")
+    if pre_check_label:
+        logger.info("Pre-check output text format")
+        for i in iter_length:
+            if format in ["latex", "markdown"]:
+                text = pypandoc.convert_text(df.iloc[i]["label"], to="html", format=format)
+                if "<table>" not in text:
+                    raise ValueError(f"format error: incorrect {format}")
+            elif format in ["str"]:
+                pass
+            else:
+                raise ValueError("format error")
 
     # Convert to dataset format
     dataset = list()
@@ -207,5 +212,7 @@ if __name__ == "__main__":
         level=logging.INFO if args.verbose else logging.WARNING,
     )
     delattr(args, "verbose")
+
+    print(pprint.pformat(vars(args)))
 
     convert_got_ocr_dataset_from_tmpco(**vars(args))
