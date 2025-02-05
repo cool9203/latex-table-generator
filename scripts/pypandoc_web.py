@@ -47,7 +47,7 @@ def pypandoc_web(
     host: str = "0.0.0.0",
     port: int = 7860,
 ):
-    with gr.Blocks() as demo:
+    with gr.Blocks(title="Pypandoc 渲染測試網站") as demo:
         gr.Markdown("## Pypandoc 渲染測試網站")
 
         with gr.Row():
