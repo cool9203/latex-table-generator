@@ -84,8 +84,9 @@ def run_GOT(
     unique_id = str(uuid.uuid4())
     image_path = Path(UPLOAD_FOLDER, f"{unique_id}.png")
     crop_image_path = Path(UPLOAD_FOLDER, f"{unique_id}-crop.png")
-    result_path = Path(RESULTS_FOLDER, f"{unique_id}.html")
     crop_image = None
+    origin_response = ""
+    html_response = ""
 
     shutil.copy(image, str(image_path))
 
@@ -108,7 +109,7 @@ def run_GOT(
                     _cropped_table_image,
                     (
                         (crop_image.size[0] - _cropped_table_image.size[0]) // 2,
-                        (crop_image.size[1] - _cropped_table_image.size[1]) // 2,
+                        int(crop_image.size[1] * 0.01),
                     ),
                 )
 
@@ -138,17 +139,14 @@ def run_GOT(
                     },
                 ]
             )
-            request_config = RequestConfig(max_tokens=4096, temperature=0)
+            request_config = RequestConfig(max_tokens=1280, temperature=0)
             resp_list = engine.infer([infer_request], request_config)
             response = resp_list[0].choices[0].message.content
 
-            outputs = response
-
             # Process the LaTeX code response
-            latex_code = response.replace("罩位重", "單位重").replace(
+            origin_response = response.replace("罩位重", "單位重").replace(
                 "彐鴉垂直向", "彎鉤垂直向"
             )  # Add all replacements as necessary
-            # latex_code = re.sub(r"\\multicolumn\{.*?\\\\\n", "", latex_code)
 
             # Generate timestamp for filenames
             timestamp = str(int(time.time()))
@@ -157,89 +155,39 @@ def run_GOT(
             html_file_path = Path(app.static_folder, f"{timestamp}.html")
 
             # Convert LaTeX to HTML
-            html_content = """
+            try:
+                html_table = pypandoc.convert_text(origin_response, "html", format="latex")
+                html_content = f"""
             <!DOCTYPE html>
             <html lang="zh-TW">
             <head>
                 <meta charset="UTF-8">
                 <title>資策會 - 佩波表格影像轉文字 - 結果展示</title>
                 <style>
-                    table, th, td { border: 1px solid black; border-collapse: collapse; padding: 8px; }
+                    table, th, td {{ border: 1px solid black; border-collapse: collapse; padding: 8px; }}
                 </style>
             </head>
             <body>
-            """
-            try:
-                html_table = pypandoc.convert_text(latex_code, "html", format="latex")
-                html_content += f"<div>{html_table}</div><br>"
+            <div>{html_table}</div><br>
+            </body>
+            </html>"""
             except Exception as e:
                 print("Error converting LaTeX to HTML:", e)
-
-            html_content += "</body></html>"
+                raise e
 
             # Save the HTML content to a file
             with html_file_path.open("w", encoding="utf-8") as html_file:
                 html_file.write(html_content)
 
-            stop_str = "<|im_end|>"
-            if outputs.endswith(stop_str):
-                outputs = outputs[: -len(stop_str)]
-            outputs = outputs.strip()
-            if "\\begin{tikzpicture}" not in outputs:
-                html_path = "content-mmd-to-html.html"
-                html_path = "/home/iii/GOT-OCR2.0/GOT-OCR-2.0-master/render_tools/content-mmd-to-html.html"
-                # html_path_2 = "./results/demo.html"
-                html_path_2 = result_path
-                right_num = outputs.count("\\right")
-                left_num = outputs.count("\left")
-
-                if right_num != left_num:
-                    outputs = (
-                        outputs.replace("\left(", "(")
-                        .replace("\\right)", ")")
-                        .replace("\left[", "[")
-                        .replace("\\right]", "]")
-                        .replace("\left{", "{")
-                        .replace("\\right}", "}")
-                        .replace("\left|", "|")
-                        .replace("\\right|", "|")
-                        .replace("\left.", ".")
-                        .replace("\\right.", ".")
-                    )
-
-                outputs = outputs.replace('"', "``").replace("$", "")
-
-                outputs_list = outputs.split("\n")
-                gt = ""
-                for out in outputs_list:
-                    gt += '"' + out.replace("\\", "\\\\") + r"\n" + '"' + "+" + "\n"
-
-                gt = gt[:-2]
-
-                with open(html_path, "r") as web_f:
-                    lines = web_f.read()
-                    lines = lines.split("const text =")
-                    new_web = lines[0] + "const text =" + gt + lines[1]
-            with open(html_path_2, "w") as web_f_new:
-                web_f_new.write(new_web)
-        res_markdown = latex_code
-
-        if "II" in got_mode and html_file_path.exists():
-            with html_file_path.open("r") as f:
-                html_content = f.read()
             encoded_html = converter.convert(base64.b64encode(converter.convert(html_content).encode("utf-8")).decode("utf-8"))
-            iframe_src = f"data:text/html;base64,{encoded_html}"
-            iframe = f'<iframe src="{iframe_src}" width="100%" height="720px"></iframe>'
             download_link = f'<a href="data:text/html;base64,{encoded_html}" download="result_{unique_id}.html">下載結果</a>'
-            return res_markdown, f"{download_link}<br>{iframe}", crop_image
-        else:
-            pass
-        #    return converter.convert(res_markdown), None
+            html_response = f"{download_link}<br>{html_content}"
     except Exception as e:
-        return f"Error: {str(e)}", None
+        html_response = "推論輸出非 latex"
     finally:
         image_path.unlink(missing_ok=True)
         crop_image_path.unlink(missing_ok=True)
+    return (origin_response, html_response, crop_image)
 
 
 # Update UI elements based on task selection
@@ -307,39 +255,37 @@ def main(
             os.makedirs(folder)
 
     title_html = """
-    <h2> <span class="gradient-text" id="text">台鋼集團 表格OCR 展示</span></h2>
+    <h2> <span class="gradient-text" id="text">GOT-OCR 表格OCR 展示</span></h2>
 
     """
 
-    with gr.Blocks() as demo:
+    with gr.Blocks(title="GOT-OCR 表格OCR 展示") as demo:
         gr.HTML(title_html)
-        gr.Markdown("""
-        " v0.2.1"
-        """)
+
+        with gr.Column():
+            image_input = gr.Image(type="filepath", label="上傳表格影像")
+            task_dropdown = gr.Dropdown(
+                choices=[
+                    "OCR",
+                    "OCR II",
+                ],
+                label="OCR模型",
+                value="OCR II",
+            )
+            crop_table_status = gr.Checkbox(label="是否自動偵測表格", value=True)
+            crop_table_padding = gr.Slider(label="偵測表格裁切框 padding", value=-60, minimum=-300, maximum=300, step=1)
+
+            submit_button = gr.Button("送出")
+
+        ocr_result = gr.Textbox(label="辨識輸出")
 
         with gr.Row():
             with gr.Column():
-                image_input = gr.Image(type="filepath", label="上傳表格影像")
-                task_dropdown = gr.Dropdown(
-                    choices=[
-                        "OCR",
-                        "OCR II",
-                    ],
-                    label="OCR模型",
-                    value="OCR II",
-                )
-                crop_table_status = gr.Checkbox(label="是否自動偵測表格", value=True)
-                crop_table_padding = gr.Slider(label="偵測表格裁切框 padding", value=-60, minimum=-300, maximum=300, step=1)
-
-                submit_button = gr.Button("送出")
+                crop_table_result = gr.Image(label="偵測表格結果")
 
             with gr.Column():
                 gr.Markdown("**生成HTML呈現**")
                 html_result = gr.HTML(label="結果如下", show_label=True)
-
-        with gr.Column():
-            ocr_result = gr.Textbox(label="辨識輸出")
-            crop_table_result = gr.Image(label="偵測表格結果")
 
         task_dropdown.change(task_update, inputs=[task_dropdown], outputs=[])
 
