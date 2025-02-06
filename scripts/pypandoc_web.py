@@ -16,7 +16,7 @@ def arg_parser() -> argparse.Namespace:
         argparse.Namespace: 使用args.name取得傳遞的參數
     """
 
-    parser = argparse.ArgumentParser(description="Convert latex table to markdown")
+    parser = argparse.ArgumentParser(description="Pypandoc test web")
 
     parser.add_argument("--host", type=str, default=None, help="Server host")
     parser.add_argument("--port", type=int, default=None, help="Server port")
@@ -52,7 +52,7 @@ def pypandoc_web(
 
         with gr.Row():
             with gr.Column():
-                latex_text = gr.TextArea(label="Source")
+                source_text = gr.TextArea(label="Source")
 
             with gr.Column():
                 html_table = gr.HTML(label="渲染結果")
@@ -69,7 +69,7 @@ def pypandoc_web(
         submit_button.click(
             convert_to_html,
             inputs=[
-                latex_text,
+                source_text,
                 source_format,
             ],
             outputs=html_table,
