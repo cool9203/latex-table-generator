@@ -84,7 +84,7 @@ def run_GOT(
     unique_id = str(uuid.uuid4())
     image_path = Path(UPLOAD_FOLDER, f"{unique_id}.png")
     crop_image_path = Path(UPLOAD_FOLDER, f"{unique_id}-crop.png")
-    crop_image = None
+    crop_image = image
     origin_response = ""
     html_response = ""
 
@@ -103,15 +103,7 @@ def run_GOT(
 
             for _, crop_image_base64 in resp.json().items():
                 crop_image_data = base64.b64decode(crop_image_base64)
-                crop_image = Image.new(mode="RGB", size=(2480, 3508), color=(255, 255, 255))
-                _cropped_table_image = Image.open(io.BytesIO(crop_image_data))
-                crop_image.paste(
-                    _cropped_table_image,
-                    (
-                        (crop_image.size[0] - _cropped_table_image.size[0]) // 2,
-                        int(crop_image.size[1] * 0.01),
-                    ),
-                )
+                crop_image = Image.open(io.BytesIO(crop_image_data))
 
                 with image_path.open("wb") as f:
                     f.write(crop_image_data)
@@ -254,38 +246,34 @@ def main(
         if not os.path.exists(folder):
             os.makedirs(folder)
 
-    title_html = """
-    <h2> <span class="gradient-text" id="text">GOT-OCR 表格OCR 展示</span></h2>
+    with gr.Blocks(title="GOT-OCR 生成表格測試網站") as demo:
+        gr.Markdown("## GOT-OCR 生成表格測試網站")
 
-    """
+        with gr.Row():
+            with gr.Column():
+                image_input = gr.Image(type="filepath", label="上傳圖片")
 
-    with gr.Blocks(title="GOT-OCR 表格OCR 展示") as demo:
-        gr.HTML(title_html)
+            with gr.Column():
+                task_dropdown = gr.Dropdown(
+                    choices=[
+                        "OCR",
+                        "OCR II",
+                    ],
+                    label="OCR模型",
+                    value="OCR II",
+                )
+                crop_table_status = gr.Checkbox(label="是否自動偵測表格", value=True)
+                crop_table_padding = gr.Slider(label="偵測表格裁切框 padding", value=-60, minimum=-300, maximum=300, step=1)
 
-        with gr.Column():
-            image_input = gr.Image(type="filepath", label="上傳表格影像")
-            task_dropdown = gr.Dropdown(
-                choices=[
-                    "OCR",
-                    "OCR II",
-                ],
-                label="OCR模型",
-                value="OCR II",
-            )
-            crop_table_status = gr.Checkbox(label="是否自動偵測表格", value=True)
-            crop_table_padding = gr.Slider(label="偵測表格裁切框 padding", value=-60, minimum=-300, maximum=300, step=1)
-
-            submit_button = gr.Button("送出")
-
-        ocr_result = gr.Textbox(label="辨識輸出")
+        submit_button = gr.Button("生成表格")
+        ocr_result = gr.Textbox(label="生成的文字輸出")
 
         with gr.Row():
             with gr.Column():
                 crop_table_result = gr.Image(label="偵測表格結果")
 
             with gr.Column():
-                gr.Markdown("**生成HTML呈現**")
-                html_result = gr.HTML(label="結果如下", show_label=True)
+                html_result = gr.HTML(label="生成的表格輸出", show_label=True)
 
         task_dropdown.change(task_update, inputs=[task_dropdown], outputs=[])
 
