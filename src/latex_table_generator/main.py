@@ -177,14 +177,14 @@ def random_generate_latex_table_string(
     add_space_row_percentage: float,
     rng: random.Random = None,
 ) -> str:
-    latex_table_str = rf"\begin{{tabular}}{{{'c'.join(['|' for _ in range(len(headers) + 1)])}}}"
+    latex_table_str = rf"\begin{{tabular}}{{{''.join(['c' for _ in range(len(headers))])}}}"
 
     # Add column name
     columns = list()
     for header in headers:
         names = header.get("names")
         columns.append(names[rng.randint(0, len(names) - 1)])
-    latex_table_str += r"\hline " + "&".join(columns) + " \\\\\n"
+    latex_table_str += "&".join(columns) + " \\\\\n"
 
     # Add row
     rows_count = rng.randint(rows_range[0], rows_range[1])
@@ -223,10 +223,10 @@ def random_generate_latex_table_string(
                 value = str(value) if value is not None else value
                 value = rf"\#{value}" if value is not None and _hashtag else value
                 values.append(value if value is not None else "")
-        rows.append(r"\hline " + "&".join(values))
+        rows.append("&".join(values))
 
     latex_table_str += "\\\\\n".join(rows)
-    latex_table_str += "\\hline\n\\end{tabular}"
+    latex_table_str += r"\end{tabular}"
     return latex_table_str
 
 
@@ -262,7 +262,7 @@ def dropout_table_content(
     dropout_indexes = dropout_indexes[: int(len(dropout_indexes) * dropout_percentage)]
 
     # Start drop cell content
-    rows = [r"\hline " + "&".join([str(c) for c in table.columns])]
+    rows = ["&".join([str(c) for c in table.columns])]
     for i in range(len(table)):
         contents = list()
 
@@ -272,9 +272,8 @@ def dropout_table_content(
             else:
                 contents.append(v)
         contents_str = "&".join(contents)
-        rows.append(rf"\hline {contents_str}" if r"\cline" not in contents_str else contents_str)
+        rows.append(contents_str)
 
-    rows.append(r"\hline")
     final_latex_table_image_str = " \\\\\n".join(rows)
     return f"{begin_str}\n{final_latex_table_image_str}\n{end_str}"
 
@@ -290,7 +289,7 @@ def filling_image_to_cell(
     (begin_str, end_str) = pre_check_latex_table_string(latex_table_str=latex_table_str)
 
     table = convert_latex_table_to_pandas(latex_table_str, headers=True)
-    rows = [r"\hline " + "&".join([str(c) for c in table.columns])]
+    rows = ["&".join([str(c) for c in table.columns])]
     col_names: List[Tuple[int, str, bool]] = list()
     for i, col_name in enumerate(table.columns):
         for specific_header in image_specific_headers:
@@ -318,9 +317,8 @@ def filling_image_to_cell(
             else:
                 contents.append(v)
         contents_str = "&".join(contents)
-        rows.append(rf"\hline {contents_str}" if r"\cline" not in contents_str else contents_str)
+        rows.append(contents_str)
 
-    rows.append(r"\hline")
     final_latex_table_image_str = " \\\\\n".join(rows)
     return f"{begin_str}\n{final_latex_table_image_str}\n{end_str}"
 
@@ -388,15 +386,13 @@ def merge_horizontal_cell(
         cells_merge = list()
         for i in list_of_merge:
             if isinstance(i, list):
-                cells_merge.append(f"\multicolumn{{{len(i)}}}{{|c|}}{{{merge_content}}}")
+                cells_merge.append(f"\multicolumn{{{len(i)}}}{{c}}{{{merge_content}}}")
             else:
                 cells_merge.append(i)
         row_merge = "&".join(cells_merge)
-        rows_image[rand_num] = rf"\hline {row_merge}"
-        rows_label[rand_num] = rf"\hline {merge_content_label}"
+        rows_image[rand_num] = row_merge
+        rows_label[rand_num] = merge_content_label
 
-    rows_image.append(r"\hline")
-    rows_label.append(r"\hline")
     latex_table_image_str = "\\\\\n".join(rows_image)
     latex_table_label_str = "\\\\\n".join(rows_label)
     return (
@@ -420,8 +416,8 @@ def merge_vertical_cell(
     end_str = r"\end{tabular}"
 
     table = convert_latex_table_to_pandas(latex_table_str, headers=True)
-    rows_image = [r"\hline " + "&".join([str(c) for c in table.columns])]
-    rows_label = [r"\hline " + "&".join([str(c) for c in table.columns])]
+    rows_image = ["&".join([str(c) for c in table.columns])]
+    rows_label = ["&".join([str(c) for c in table.columns])]
     rand_nums = [i for i in range(0, len(table) - 1, 2)]
     rng.shuffle(rand_nums)
     rand_nums = sorted(rand_nums[:count])
@@ -469,7 +465,7 @@ def merge_vertical_cell(
     for i in range(len(table)):
         contents_image = list()
         contents_label = list()
-        if i in all_multirow_index:  # add multirow and cline
+        if i in all_multirow_index:  # add multirow
             multirow_data = np.array([multirow.index(i) if i in multirow else -1 for multirow in multirow_index])
             index = np.nonzero(multirow_data + 1)[0][0]
             col, col_name = all_col_names[index]
@@ -503,11 +499,9 @@ def merge_vertical_cell(
             contents_label = [str(e) for e in table.iloc[i]]
         contents_image = "&".join(contents_image)
         contents_label = "&".join(contents_label)
-        rows_image.append(rf"\hline {contents_image}" if r"\cline" not in contents_image else contents_image)
-        rows_label.append(rf"\hline {contents_label}" if r"\cline" not in contents_label else contents_label)
+        rows_image.append(contents_image)
+        rows_label.append(contents_label)
 
-    rows_image.append(r"\hline")
-    rows_label.append(r"\hline")
     final_latex_table_image_str = " \\\\\n".join(rows_image)
     final_latex_table_label_str = " \\\\\n".join(rows_label)
     return (
@@ -531,8 +525,8 @@ def merge_vertical_and_horizontal_cell(
     end_str = r"\end{tabular}"
 
     table = convert_latex_table_to_pandas(latex_table_str, headers=True)
-    rows_image = [r"\hline " + "&".join([str(c) for c in table.columns])]
-    rows_label = [r"\hline " + "&".join([str(c) for c in table.columns])]
+    rows_image = ["&".join([str(c) for c in table.columns])]
+    rows_label = ["&".join([str(c) for c in table.columns])]
     rand_nums = [i for i in range(0, len(table) - 1, 2)]
     rng.shuffle(rand_nums)
     rand_nums = sorted(rand_nums[:count])
@@ -582,7 +576,7 @@ def merge_vertical_and_horizontal_cell(
     for i in range(len(table)):
         contents_image = list()
         contents_label = list()
-        if i in all_multirow_index:  # add multirow and cline
+        if i in all_multirow_index:  # add multirow
             multirow_data = np.array([multirow.index(i) if i in multirow else -1 for multirow in multirow_index])
             index = np.nonzero(multirow_data + 1)[0][0]
             col, col_name = all_col_names[index]
@@ -602,7 +596,7 @@ def merge_vertical_and_horizontal_cell(
                     if i in rand_nums:  # multirow 不會重複加, 所以只加第一次
                         if j == col[0]:
                             contents_image.append(
-                                rf"\multicolumn{{{len(col)}}}{{|c|}}{{\multirow{{{row_span}}}{{*}}{{{_cell_content}}}}}"
+                                rf"\multicolumn{{{len(col)}}}{{c}}{{\multirow{{{row_span}}}{{*}}{{{_cell_content}}}}}"
                             )
                         else:
                             pass
@@ -617,11 +611,9 @@ def merge_vertical_and_horizontal_cell(
             contents_label = [str(e) for e in table.iloc[i]]
         contents_image = "&".join(contents_image)
         contents_label = "&".join(contents_label)
-        rows_image.append(rf"\hline {contents_image}" if r"\cline" not in contents_image else contents_image)
-        rows_label.append(rf"\hline {contents_label}" if r"\cline" not in contents_label else contents_label)
+        rows_image.append(contents_image)
+        rows_label.append(contents_label)
 
-    rows_image.append(r"\hline")
-    rows_label.append(r"\hline")
     final_latex_table_image_str = " \\\\\n".join(rows_image)
     final_latex_table_label_str = " \\\\\n".join(rows_label)
     return (
