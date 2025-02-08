@@ -251,7 +251,7 @@ def main(
 
         with gr.Row():
             with gr.Column():
-                image_input = gr.Image(type="filepath", label="上傳圖片")
+                image_input = gr.Image(type="filepath", label="上傳圖片", mirror_webcam=False)
 
             with gr.Column():
                 task_dropdown = gr.Dropdown(
