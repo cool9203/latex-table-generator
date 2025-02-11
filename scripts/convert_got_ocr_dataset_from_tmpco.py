@@ -72,34 +72,37 @@ def load_label_data(
         read_filenames = set()
         path = Path(root_path, folder_name) if folder_name else Path(root_path)
         for filepath in path.glob(r"*.txt"):
-            if filepath.stem not in read_filenames:
-                base_name = filepath.stem
-                extension_name = None
-                logger.info(f"Read {base_name!s}")
-                read_filenames.add(base_name)
+            if filepath.stem in read_filenames:
+                logger.warning(f"{filepath!s} repeat")
+                continue
 
-                # Read image and check label file
-                if Path(path, f"{base_name}.txt").exists():
-                    if Path(path, f"{base_name}.jpg").exists():
-                        extension_name = ".jpg"
-                    elif Path(path, f"{base_name}.png").exists():
-                        extension_name = ".png"
-                    else:
-                        raise FileNotFoundError("Not found image file")
+            base_name = filepath.stem
+            extension_name = None
+            logger.info(f"Read {base_name!s}")
+            read_filenames.add(base_name)
 
-                    with Path(path, f"{base_name}.txt").open("r", encoding="utf-8") as f:
-                        label_content = f.read()
+            # Read image and check label file
+            if Path(path, f"{base_name}.txt").exists():
+                if Path(path, f"{base_name}.jpg").exists():
+                    extension_name = ".jpg"
+                elif Path(path, f"{base_name}.png").exists():
+                    extension_name = ".png"
                 else:
-                    raise FileNotFoundError("Not found label file")
+                    raise FileNotFoundError("Not found image file")
 
-                data.append(
-                    {
-                        "label": label_content,
-                        "source": base_name,
-                        "full_source": str(Path(path, base_name)),
-                        "image_path": str(Path(path, f"{base_name}{extension_name}")),
-                    }
-                )
+                with Path(path, f"{base_name}.txt").open("r", encoding="utf-8") as f:
+                    label_content = f.read()
+            else:
+                raise FileNotFoundError("Not found label file")
+
+            data.append(
+                {
+                    "label": label_content,
+                    "source": base_name,
+                    "full_source": str(Path(path, base_name)),
+                    "image_path": str(Path(path, f"{base_name}{extension_name}")),
+                }
+            )
 
         return data
 
