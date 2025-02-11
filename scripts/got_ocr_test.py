@@ -27,7 +27,8 @@ from swift.utils import seed_everything
 from transformers import AutoModel, AutoTokenizer
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-system = "        You should follow the instructions carefully and explain your answers in detail."
+_default_prompt = "OCR with format:"
+_default_system_prompt = "        You should follow the instructions carefully and explain your answers in detail."
 history = []
 query = "<image>OCR with format:"
 
@@ -72,26 +73,28 @@ def image_to_base64(image):
 
 
 @spaces.GPU
-def run_GOT(
+def inference_table(
     image,
-    got_mode,
-    crop_table_status,
-    crop_table_padding,
-    fine_grained_mode="",
-    ocr_color="",
-    ocr_box="",
+    prompt: str,
+    detect_table: bool,
+    crop_table_padding: int,
+    max_tokens: int = 4096,
+    model_name: str = None,
+    system_prompt: str = _default_system_prompt,
 ):
+    if model_name not in ["OCR", "OCR II"]:
+        raise ValueError("Model not exists, should be ['OCR', 'OCR II']")
+
+    _image = Image.open(image) if isinstance(image, str) else image
     unique_id = str(uuid.uuid4())
     image_path = Path(UPLOAD_FOLDER, f"{unique_id}.png")
-    crop_image_path = Path(UPLOAD_FOLDER, f"{unique_id}-crop.png")
-    crop_image = image
     origin_response = ""
     html_response = ""
 
-    shutil.copy(image, str(image_path))
+    _image.save(image_path)
 
     try:
-        if crop_table_status:
+        if detect_table:
             resp = httpx.post(
                 "http://10.70.0.232:9999/upload",
                 files={"file": image_path.open("rb")},
@@ -103,35 +106,33 @@ def run_GOT(
 
             for _, crop_image_base64 in resp.json().items():
                 crop_image_data = base64.b64decode(crop_image_base64)
-                crop_image = Image.open(io.BytesIO(crop_image_data))
-
-                with image_path.open("wb") as f:
-                    f.write(crop_image_data)
+                _image = Image.open(io.BytesIO(crop_image_data))
+                _image.save(str(image_path))
                 break
 
-        if got_mode == "OCR":
+        if model_name == "OCR":
             res = model.chat(tokenizer, str(image_path), ocr_type="ocr")
-            return converter.convert(res), None, crop_image
-        elif got_mode == "OCR II":
+            return converter.convert(res), None, _image
+        elif model_name == "OCR II":
             infer_request = InferRequest(
                 messages=[
                     {
                         "role": "system",
-                        "content": "        You should follow the instructions carefully and explain your answers in detail.",
+                        "content": system_prompt,
                     },
                     {
                         "role": "user",
                         "content": [
                             {
                                 "type": "image",
-                                "image": str(crop_image_path) if crop_image_path.exists() else str(image_path),
+                                "image": str(image_path),
                             },
-                            {"type": "text", "text": "OCR with format:"},
+                            {"type": "text", "text": prompt},
                         ],
                     },
                 ]
             )
-            request_config = RequestConfig(max_tokens=1280, temperature=0)
+            request_config = RequestConfig(max_tokens=max_tokens, temperature=0)
             resp_list = engine.infer([infer_request], request_config)
             response = resp_list[0].choices[0].message.content
 
@@ -178,8 +179,7 @@ def run_GOT(
         html_response = "推論輸出非 latex"
     finally:
         image_path.unlink(missing_ok=True)
-        crop_image_path.unlink(missing_ok=True)
-    return (origin_response, html_response, crop_image)
+    return (origin_response, html_response, _image)
 
 
 # Update UI elements based on task selection
@@ -254,7 +254,7 @@ def main(
                 image_input = gr.Image(type="filepath", label="上傳圖片", mirror_webcam=False)
 
             with gr.Column():
-                task_dropdown = gr.Dropdown(
+                model_name = gr.Dropdown(
                     choices=[
                         "OCR",
                         "OCR II",
@@ -262,7 +262,10 @@ def main(
                     label="OCR模型",
                     value="OCR II",
                 )
-                crop_table_status = gr.Checkbox(label="是否自動偵測表格", value=True)
+                system_prompt_input = gr.Textbox(label="輸入系統文字提示", lines=2, value=_default_system_prompt)
+                prompt_input = gr.Textbox(label="輸入文字提示", lines=2, value=_default_prompt)
+                max_tokens = gr.Slider(label="Max tokens", value=1024, minimum=1, maximum=8192, step=1)
+                detect_table = gr.Checkbox(label="是否自動偵測表格", value=True)
                 crop_table_padding = gr.Slider(label="偵測表格裁切框 padding", value=-60, minimum=-300, maximum=300, step=1)
 
         submit_button = gr.Button("生成表格")
@@ -275,11 +278,19 @@ def main(
             with gr.Column():
                 html_result = gr.HTML(label="生成的表格輸出", show_label=True)
 
-        task_dropdown.change(task_update, inputs=[task_dropdown], outputs=[])
+        model_name.change(task_update, inputs=[model_name], outputs=[])
 
         submit_button.click(
-            run_GOT,
-            inputs=[image_input, task_dropdown, crop_table_status, crop_table_padding],
+            inference_table,
+            inputs=[
+                image_input,
+                prompt_input,
+                detect_table,
+                crop_table_padding,
+                max_tokens,
+                model_name,
+                system_prompt_input,
+            ],
             outputs=[ocr_result, html_result, crop_table_result],
         )
     demo.launch(server_name=host, server_port=port)
