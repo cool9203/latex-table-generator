@@ -167,9 +167,14 @@ def convert_got_ocr_dataset_from_tmpco(
         logger.info("Pre-check output text format")
         for i in iter_length:
             if format in ["latex", "markdown"]:
-                text = pypandoc.convert_text(df.iloc[i]["label"], to="html", format=format)
+                _error = ValueError(f"format error: incorrect {format}, {df.iloc[i]['source']}")
+                try:
+                    text = pypandoc.convert_text(df.iloc[i]["label"], to="html", format=format)
+                except Exception as e:
+                    raise _error from e
+
                 if "<table>" not in text:
-                    raise ValueError(f"format error: incorrect {format}")
+                    raise _error
             elif format in ["str"]:
                 pass
             else:
@@ -185,12 +190,12 @@ def convert_got_ocr_dataset_from_tmpco(
                 "system": "You should follow the instructions carefully and explain your answers in detail.",
                 "query": "<image>OCR with format:",
                 "response": df.iloc[i]["label"],
-                "images": [str(Path(image_root_path, f'{df.iloc[i]["source"]}.jpg'))],
+                "images": [str(Path(image_root_path, f"{df.iloc[i]['source']}.jpg"))],
             }
         )
         if copy_image:
             with Image.open(df.iloc[i]["image_path"]) as image_file:
-                image_file.save(str(Path(image_save_path, f'{df.iloc[i]["source"]}.jpg')))
+                image_file.save(str(Path(image_save_path, f"{df.iloc[i]['source']}.jpg")))
     logger.info("Convert to dataset format end")
 
     dataset_save_path = Path(output_path, Path(output_name).stem + ".jsonl")
