@@ -19,8 +19,8 @@ from latex_table_generator.errors import (
 
 _latex_table_begin_pattern = r"\\begin{tabular}{[lrc|]*}"
 _latex_table_end_pattern = r"\\end{tabular}"
-_latex_multicolumn_pattern = r"\\multicolumn{(\d+)}{[lrc|]+}{(.*)}"
-_latex_multirow_pattern = r"\\multirow{(\d+)}{[\*\d]+}{(.*)}"
+_latex_multicolumn_pattern = r"\\multicolumn{(\d+)}{([lrc|]+)}{(.*)}"
+_latex_multirow_pattern = r"\\multirow{(\d+)}{([\*\d]+)}{(.*)}"
 
 
 logger = logging.getLogger(__name__)
@@ -117,10 +117,12 @@ def convert_latex_table_to_pandas(
                 multicolumn_data = re.findall(_latex_multicolumn_pattern, cell)[0]
                 for index in range(int(multicolumn_data[0])):
                     if unsqueeze:
-                        _row_data.append(multicolumn_data[1])
+                        _row_data.append(multicolumn_data[2].strip())
                     else:
                         if index == 0:
-                            _row_data.append(cell.strip())
+                            _row_data.append(
+                                rf"\multicolumn{{{multicolumn_data[0]}}}{{{multicolumn_data[1]}}}{{{multicolumn_data[2].strip()}}}"
+                            )
                         else:
                             _row_data.append("")
             else:
@@ -135,8 +137,11 @@ def convert_latex_table_to_pandas(
             if multirow_result:
                 if unsqueeze:
                     for offset in range(int(multirow_result[0][0])):
-                        cleaned_data[col + offset][row] = multirow_result[0][1]
+                        cleaned_data[col + offset][row] = multirow_result[0][2].strip()
                 else:
+                    cleaned_data[col][row] = (
+                        rf"\multirow{{{multirow_result[0][0]}}}{{{multirow_result[0][1]}}}{{{multirow_result[0][2].strip()}}}"
+                    )
                     for offset in range(1, int(multirow_result[0][0])):
                         cleaned_data[col + offset][row] = ""
 
