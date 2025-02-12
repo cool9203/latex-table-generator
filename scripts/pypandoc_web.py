@@ -5,6 +5,8 @@ import argparse
 import gradio as gr
 import pypandoc
 
+from latex_table_generator import utils
+
 
 def arg_parser() -> argparse.Namespace:
     """取得執行程式時傳遞的參數
@@ -29,8 +31,22 @@ def arg_parser() -> argparse.Namespace:
 def convert_to_html(
     source: str,
     format: str,
-) -> str:
+    repair_latex: bool = False,
+    full_border: bool = False,
+    unsqueeze: bool = False,
+) -> tuple[str, str]:
     response = ""
+    if format in ["latex"]:
+        if repair_latex:
+            source = utils.convert_pandas_to_latex(
+                df=utils.convert_latex_table_to_pandas(
+                    latex_table_str=source,
+                    headers=True,
+                    unsqueeze=unsqueeze,
+                ),
+                full_border=full_border,
+            )
+
     try:
         response = pypandoc.convert_text(
             source=source,
@@ -40,7 +56,10 @@ def convert_to_html(
     except Exception as e:
         pass
 
-    return response if "<table>" in response else f"格式有誤或是並非 {format}"
+    return (
+        response if "<table>" in response else f"格式有誤或是並非 {format}",
+        source,
+    )
 
 
 def pypandoc_web(
@@ -53,6 +72,7 @@ def pypandoc_web(
         with gr.Row():
             with gr.Column():
                 source_text = gr.TextArea(label="Source")
+                repair_source_text = gr.TextArea(label="Repair source")
 
             with gr.Column():
                 html_table = gr.HTML(label="渲染結果")
@@ -64,6 +84,9 @@ def pypandoc_web(
             ],
             label="Source format",
         )
+        repair_latex = gr.Checkbox(value=True, label="修復 latex")
+        full_border = gr.Checkbox(label="修復 latex 表格全框線")
+        unsqueeze = gr.Checkbox(label="修復 latex 並解開多行/列合併")
         submit_button = gr.Button("渲染")
 
         submit_button.click(
@@ -71,8 +94,11 @@ def pypandoc_web(
             inputs=[
                 source_text,
                 source_format,
+                repair_latex,
+                full_border,
+                unsqueeze,
             ],
-            outputs=html_table,
+            outputs=[html_table, repair_source_text],
         )
 
         demo.launch(
