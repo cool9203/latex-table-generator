@@ -184,13 +184,13 @@ def convert_pandas_to_latex(
     for i in range(len(df)):
         row = list()
         skip_count = 0
-        for column in df.columns:
+        for column_index in range(len(df.columns)):
             if skip_count > 0:
                 skip_count -= 1
             else:
-                multicolumn_result = re.findall(_latex_multicolumn_pattern, df[column].iloc[i])
+                multicolumn_result = re.findall(_latex_multicolumn_pattern, df.iloc[i, column_index])
                 skip_count = int(multicolumn_result[0][0]) - 1 if multicolumn_result and skip_count == 0 else skip_count
-                row.append(df[column].iloc[i])
+                row.append(df.iloc[i, column_index])
         latex_table_str += _row_before_text + f"{'&'.join(row)}\\\\\n"
 
     if full_border:
