@@ -10,6 +10,11 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
+from typing import (
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import gradio as gr
 import httpx
@@ -19,6 +24,7 @@ import pandas as pd
 import pypandoc
 import spaces
 import torch
+import utils
 from flask import Flask, jsonify, request
 from PIL import Image
 from swift.llm import InferRequest, ModelType, PtEngine, RequestConfig, TemplateType, get_model_tokenizer, get_template
@@ -26,11 +32,14 @@ from swift.tuners import Swift
 from swift.utils import seed_everything
 from transformers import AutoModel, AutoTokenizer
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 _default_prompt = "OCR with format:"
 _default_system_prompt = "        You should follow the instructions carefully and explain your answers in detail."
 history = []
 query = "<image>OCR with format:"
+_latex_table_begin_pattern = r"\\begin{tabular}{[lrc|]*}"
+_latex_table_end_pattern = r"\\end{tabular}"
+_latex_multicolumn_pattern = r"\\multicolumn{(\d+)}{([lrc|]+)}{(.*)}"
+_latex_multirow_pattern = r"\\multirow{(\d+)}{([\*\d]+)}{(.*)}"
 
 # Define upload and results folders
 UPLOAD_FOLDER = "./uploads"
@@ -59,6 +68,7 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("-m", "--model_name_or_path", required=True, help="Model name or path")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Server host")
     parser.add_argument("--port", type=int, default=30308, help="Server port")
+    parser.add_argument("--device_map", type=str, default="cuda:0", help="Run model device map")
 
     args = parser.parse_args()
 
@@ -81,6 +91,9 @@ def inference_table(
     max_tokens: int = 4096,
     model_name: str = None,
     system_prompt: str = _default_system_prompt,
+    repair_latex: bool = False,
+    full_border: bool = False,
+    unsqueeze: bool = False,
 ):
     if model_name not in ["OCR", "OCR II"]:
         raise ValueError("Model not exists, should be ['OCR', 'OCR II']")
@@ -110,9 +123,10 @@ def inference_table(
                 _image.save(str(image_path))
                 break
 
+        start_time = time.time()
         if model_name == "OCR":
             res = model.chat(tokenizer, str(image_path), ocr_type="ocr")
-            return converter.convert(res), None, _image
+            return converter.convert(res), None, _image, time.time() - start_time
         elif model_name == "OCR II":
             infer_request = InferRequest(
                 messages=[
@@ -134,7 +148,10 @@ def inference_table(
             )
             request_config = RequestConfig(max_tokens=max_tokens, temperature=0)
             resp_list = engine.infer([infer_request], request_config)
+            end_time = time.time()
+
             response = resp_list[0].choices[0].message.content
+            tokens = resp_list[0].usage.completion_tokens
 
             # Process the LaTeX code response
             origin_response = response.replace("罩位重", "單位重").replace(
@@ -149,6 +166,15 @@ def inference_table(
 
             # Convert LaTeX to HTML
             try:
+                if repair_latex:
+                    origin_response = utils.convert_pandas_to_latex(
+                        df=utils.convert_latex_table_to_pandas(
+                            latex_table_str=origin_response,
+                            headers=True,
+                            unsqueeze=unsqueeze,
+                        ),
+                        full_border=full_border,
+                    )
                 html_table = pypandoc.convert_text(origin_response, "html", format="latex")
                 html_content = f"""
             <!DOCTYPE html>
@@ -179,7 +205,12 @@ def inference_table(
         html_response = "推論輸出非 latex"
     finally:
         image_path.unlink(missing_ok=True)
-    return (origin_response, html_response, _image)
+    return (
+        origin_response,
+        html_response,
+        _image,
+        tokens / (end_time - start_time),
+    )
 
 
 # Update UI elements based on task selection
@@ -224,13 +255,14 @@ def main(
     model_name_or_path: str,
     host: str,
     port: int,
+    device_map: str = "cuda:0",
 ):
     global model, tokenizer, template, engine
     model, tokenizer = get_model_tokenizer(
-        "stepfun-ai/GOT-OCR2_0", None, model_kwargs={"device_map": "cuda:0"}, revision="master"
+        "stepfun-ai/GOT-OCR2_0", None, model_kwargs={"device_map": device_map}, revision="master"
     )
     model = Swift.from_pretrained(model, model_name_or_path, inference_mode=True)
-    model.to("cuda")
+    model.to(device_map)
     model.requires_grad_(False)
 
     model.generation_config.max_new_tokens = 2048
@@ -267,6 +299,10 @@ def main(
                 max_tokens = gr.Slider(label="Max tokens", value=1024, minimum=1, maximum=8192, step=1)
                 detect_table = gr.Checkbox(label="是否自動偵測表格", value=True)
                 crop_table_padding = gr.Slider(label="偵測表格裁切框 padding", value=-60, minimum=-300, maximum=300, step=1)
+                repair_latex = gr.Checkbox(value=True, label="修復 latex")
+                full_border = gr.Checkbox(label="修復 latex 表格全框線")
+                unsqueeze = gr.Checkbox(label="修復 latex 並解開多行/列合併")
+                time_usage = gr.Textbox(label="每秒幾個 token")
 
         submit_button = gr.Button("生成表格")
         ocr_result = gr.Textbox(label="生成的文字輸出")
@@ -290,8 +326,11 @@ def main(
                 max_tokens,
                 model_name,
                 system_prompt_input,
+                repair_latex,
+                full_border,
+                unsqueeze,
             ],
-            outputs=[ocr_result, html_result, crop_table_result],
+            outputs=[ocr_result, html_result, crop_table_result, time_usage],
         )
     demo.launch(server_name=host, server_port=port)
 
