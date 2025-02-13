@@ -81,6 +81,7 @@ def pypandoc_web(
             [
                 "latex",
                 "markdown",
+                "html",
             ],
             label="Source format",
         )
