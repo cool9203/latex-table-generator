@@ -1,20 +1,16 @@
+# coding: utf-8
+
 import argparse
 import base64
 import io
-import json
 import os
 import pprint
-import re
-import shutil
-import tempfile
 import time
+import traceback
 import uuid
 from pathlib import Path
-from typing import (
-    Sequence,
-    Tuple,
-    Union,
-)
+from tempfile import TemporaryDirectory
+from typing import List
 
 import gradio as gr
 import httpx
@@ -36,10 +32,6 @@ _default_prompt = "OCR with format:"
 _default_system_prompt = "        You should follow the instructions carefully and explain your answers in detail."
 history = []
 query = "<image>OCR with format:"
-_latex_table_begin_pattern = r"\\begin{tabular}{[lrc|]*}"
-_latex_table_end_pattern = r"\\end{tabular}"
-_latex_multicolumn_pattern = r"\\multicolumn{(\d+)}{([lrc|]+)}{(.*)}"
-_latex_multirow_pattern = r"\\multirow{(\d+)}{([\*\d]+)}{(.*)}"
 
 # Define upload and results folders
 UPLOAD_FOLDER = "./uploads"
@@ -75,13 +67,6 @@ def arg_parser() -> argparse.Namespace:
     return args
 
 
-# Convert image to base64
-def image_to_base64(image):
-    buffered = io.BytesIO()
-    image.save(buffered, format="PNG")
-    return base64.b64encode(buffered.getvalue()).decode()
-
-
 @spaces.GPU
 def inference_table(
     image,
@@ -95,121 +80,128 @@ def inference_table(
     full_border: bool = False,
     unsqueeze: bool = False,
 ):
-    if model_name not in ["OCR", "OCR II"]:
-        raise ValueError("Model not exists, should be ['OCR', 'OCR II']")
+    if model_name not in ["OCR II"]:
+        raise ValueError("Model not exists, should be ['OCR II']")
 
     _image = Image.open(image) if isinstance(image, str) else image
-    unique_id = str(uuid.uuid4())
-    image_path = Path(UPLOAD_FOLDER, f"{unique_id}.png")
-    origin_response = ""
+    origin_response = list()
     html_response = ""
-    tokens = None
-
-    _image.save(image_path)
+    tokens = 0
+    images: List[Image.Image] = list()
+    start_time = time.time()
+    end_time = time.time() + 0.0001
 
     try:
-        if detect_table:
-            resp = httpx.post(
-                "http://10.70.0.232:9999/upload",
-                files={"file": image_path.open("rb")},
-                data={
-                    "action": "crop",
-                    "padding": crop_table_padding,
-                },
-            )
-
-            for _, crop_image_base64 in resp.json().items():
-                crop_image_data = base64.b64decode(crop_image_base64)
-                _image = Image.open(io.BytesIO(crop_image_data))
-                _image.save(str(image_path))
-                break
-
-        start_time = time.time()
-        if model_name == "OCR":
-            res = model.chat(tokenizer, str(image_path), ocr_type="ocr")
-            return converter.convert(res), None, _image, time.time() - start_time
-        elif model_name == "OCR II":
-            infer_request = InferRequest(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": system_prompt,
+        with TemporaryDirectory() as temp_dir:
+            if detect_table:
+                image_path = str(Path(temp_dir, f"{str(uuid.uuid4())}.jpg"))
+                _image.save(image_path)
+                resp = httpx.post(
+                    "http://10.70.0.232:9999/upload",
+                    files={"file": open(image_path, "rb")},
+                    data={
+                        "action": "crop",
+                        "padding": crop_table_padding,
                     },
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "image": str(image_path),
-                            },
-                            {"type": "text", "text": prompt},
-                        ],
-                    },
-                ]
-            )
-            request_config = RequestConfig(max_tokens=max_tokens, temperature=0)
-            resp_list = engine.infer([infer_request], request_config)
-            end_time = time.time()
+                )
 
-            response = resp_list[0].choices[0].message.content
-            tokens = resp_list[0].usage.completion_tokens
+                for crop_image_base64 in resp.json():
+                    crop_image_data = base64.b64decode(crop_image_base64)
+                    images.append(Image.open(io.BytesIO(crop_image_data)))
 
-            # Process the LaTeX code response
-            origin_response = response.replace("罩位重", "單位重").replace(
-                "彐鴉垂直向", "彎鉤垂直向"
-            )  # Add all replacements as necessary
+            start_time = time.time()
+            for _image in images:
+                image_path = str(Path(temp_dir, f"{str(uuid.uuid4())}.jpg"))
+                _image.save(image_path)
+                infer_request = InferRequest(
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": system_prompt,
+                        },
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "image": str(image_path),
+                                },
+                                {"type": "text", "text": prompt},
+                            ],
+                        },
+                    ]
+                )
+                request_config = RequestConfig(max_tokens=max_tokens, temperature=0)
+                resp_list = engine.infer([infer_request], request_config)
+                end_time = time.time()
 
-            # Generate timestamp for filenames
-            timestamp = str(int(time.time()))
+                response = resp_list[0].choices[0].message.content
+                tokens += resp_list[0].usage.completion_tokens
 
-            # Paths for the HTML and CSV files in the static folder
-            html_file_path = Path(app.static_folder, f"{timestamp}.html")
+                # Process the LaTeX code response
+                response = response.replace("罩位重", "單位重").replace(
+                    "彐鴉垂直向", "彎鉤垂直向"
+                )  # Add all replacements as necessary
 
-            # Convert LaTeX to HTML
-            try:
-                if repair_latex:
-                    origin_response = utils.convert_pandas_to_latex(
-                        df=utils.convert_latex_table_to_pandas(
-                            latex_table_str=origin_response,
-                            headers=True,
-                            unsqueeze=unsqueeze,
-                        ),
-                        full_border=full_border,
-                    )
-                html_table = pypandoc.convert_text(origin_response, "html", format="latex")
-                html_content = f"""
-            <!DOCTYPE html>
-            <html lang="zh-TW">
-            <head>
-                <meta charset="UTF-8">
-                <title>資策會 - 佩波表格影像轉文字 - 結果展示</title>
-                <style>
-                    table, th, td {{ border: 1px solid black; border-collapse: collapse; padding: 8px; }}
-                </style>
-            </head>
-            <body>
-            <div>{html_table}</div><br>
-            </body>
-            </html>"""
-            except Exception as e:
-                print("Error converting LaTeX to HTML:", e)
-                raise e
+                # Generate timestamp for filenames
+                timestamp = str(int(time.time()))
+
+                # Paths for the HTML and CSV files in the static folder
+                html_file_path = Path(app.static_folder, f"{timestamp}.html")
+
+                # Convert LaTeX to HTML
+                try:
+                    if repair_latex:
+                        origin_response.append(
+                            utils.convert_pandas_to_latex(
+                                df=utils.convert_latex_table_to_pandas(
+                                    latex_table_str=response,
+                                    headers=True,
+                                    unsqueeze=unsqueeze,
+                                ),
+                                full_border=full_border,
+                            )
+                        )
+                    else:
+                        origin_response.append(response)
+                except Exception as e:
+                    print("Error converting LaTeX to HTML:", e)
+                    raise e
+
+            html_table = pypandoc.convert_text("".join(origin_response), "html", format="latex")
+            html_content = f"""
+        <!DOCTYPE html>
+        <html lang="zh-TW">
+        <head>
+            <meta charset="UTF-8">
+            <title>資策會 - 佩波表格影像轉文字 - 結果展示</title>
+            <style>
+                table, th, td {{ border: 1px solid black; border-collapse: collapse; padding: 8px; }}
+                table {{ float: left; }}
+            </style>
+        </head>
+        <body>
+        <div>{html_table}</div><br>
+        </body>
+        </html>"""
 
             # Save the HTML content to a file
             with html_file_path.open("w", encoding="utf-8") as html_file:
                 html_file.write(html_content)
 
             encoded_html = converter.convert(base64.b64encode(converter.convert(html_content).encode("utf-8")).decode("utf-8"))
-            download_link = f'<a href="data:text/html;base64,{encoded_html}" download="result_{unique_id}.html">下載結果</a>'
-            html_response = f"{download_link}<br>{html_content}"
+            download_link = (
+                f'<a href="data:text/html;base64,{encoded_html}" download="result_{str(uuid.uuid4())}.html">下載結果</a>'
+            )
+            html_response += f"{download_link}<br>{html_content}"
     except Exception as e:
         html_response = "推論輸出非 latex"
-    finally:
-        image_path.unlink(missing_ok=True)
+        traceback.print_exception(e)
+
     return (
-        origin_response,
+        "\n\n".join(origin_response),
         html_response,
-        _image,
+        images if images else [_image],
         tokens / (end_time - start_time) if tokens is not None else "",
     )
 
@@ -307,10 +299,13 @@ def main(
 
         submit_button = gr.Button("生成表格")
         ocr_result = gr.Textbox(label="生成的文字輸出")
+        # examples = gr.Examples(
+        #     examples=[],
+        # )
 
         with gr.Row():
             with gr.Column():
-                crop_table_result = gr.Image(label="偵測表格結果")
+                crop_table_results = gr.Gallery(label="偵測表格結果", format="jpeg")
 
             with gr.Column():
                 html_result = gr.HTML(label="生成的表格輸出", show_label=True)
@@ -331,9 +326,12 @@ def main(
                 full_border,
                 unsqueeze,
             ],
-            outputs=[ocr_result, html_result, crop_table_result, time_usage],
+            outputs=[ocr_result, html_result, crop_table_results, time_usage],
         )
-    demo.launch(server_name=host, server_port=port)
+    demo.launch(
+        server_name=host,
+        server_port=port,
+    )
 
 
 if __name__ == "__main__":
