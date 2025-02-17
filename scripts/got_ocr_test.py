@@ -108,6 +108,8 @@ def inference_table(
                 for crop_image_base64 in resp.json():
                     crop_image_data = base64.b64decode(crop_image_base64)
                     images.append(Image.open(io.BytesIO(crop_image_data)))
+            else:
+                images.append(_image)
 
             start_time = time.time()
             for _image in images:
@@ -201,7 +203,7 @@ def inference_table(
     return (
         "\n\n".join(origin_response),
         html_response,
-        images if images else [_image],
+        images,
         tokens / (end_time - start_time) if tokens is not None else "",
     )
 
@@ -331,6 +333,7 @@ def main(
     demo.launch(
         server_name=host,
         server_port=port,
+        share=False,  # Reference: https://github.com/gradio-app/gradio/issues/7978#issuecomment-2567283591
     )
 
 
