@@ -103,6 +103,7 @@ def inference_table(
     image_path = Path(UPLOAD_FOLDER, f"{unique_id}.png")
     origin_response = ""
     html_response = ""
+    tokens = None
 
     _image.save(image_path)
 
@@ -209,7 +210,7 @@ def inference_table(
         origin_response,
         html_response,
         _image,
-        tokens / (end_time - start_time),
+        tokens / (end_time - start_time) if tokens is not None else "",
     )
 
 
@@ -296,7 +297,7 @@ def main(
                 )
                 system_prompt_input = gr.Textbox(label="輸入系統文字提示", lines=2, value=_default_system_prompt)
                 prompt_input = gr.Textbox(label="輸入文字提示", lines=2, value=_default_prompt)
-                max_tokens = gr.Slider(label="Max tokens", value=1024, minimum=1, maximum=8192, step=1)
+                max_tokens = gr.Slider(label="Max tokens", value=4096, minimum=1, maximum=8192, step=1)
                 detect_table = gr.Checkbox(label="是否自動偵測表格", value=True)
                 crop_table_padding = gr.Slider(label="偵測表格裁切框 padding", value=-60, minimum=-300, maximum=300, step=1)
                 repair_latex = gr.Checkbox(value=True, label="修復 latex")
