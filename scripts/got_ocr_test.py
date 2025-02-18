@@ -61,6 +61,7 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Server host")
     parser.add_argument("--port", type=int, default=30308, help="Server port")
     parser.add_argument("--device_map", type=str, default="cuda:0", help="Run model device map")
+    parser.add_argument("--dev", dest="dev_mode", action="store_true", help="Dev mode")
 
     args = parser.parse_args()
 
@@ -197,7 +198,7 @@ def inference_table(
             )
             html_response += f"{download_link}<br>{html_content}"
     except Exception as e:
-        html_response = "推論輸出非 latex"
+        html_response = "推論輸出無法解析"
         traceback.print_exception(e)
 
     return (
@@ -251,6 +252,7 @@ def main(
     host: str,
     port: int,
     device_map: str = "cuda:0",
+    dev_mode: bool = False,
 ):
     global model, tokenizer, template, engine
     model, tokenizer = get_model_tokenizer(
@@ -273,20 +275,36 @@ def main(
         if not os.path.exists(folder):
             os.makedirs(folder)
 
-    with gr.Blocks(title="GOT-OCR 生成表格測試網站") as demo:
+    with gr.Blocks(
+        title="GOT-OCR 生成表格測試網站",
+        css="#component-6 { max-height: 85vh; }",
+    ) as demo:
         gr.Markdown("## GOT-OCR 生成表格測試網站")
 
         with gr.Row():
             with gr.Column():
-                image_input = gr.Image(type="filepath", label="上傳圖片", mirror_webcam=False)
+                image_input = gr.Image(
+                    type="filepath",
+                    label="上傳圖片",
+                    height="85vh",
+                    mirror_webcam=False,
+                )
+
+            with gr.Column():
+                html_result = gr.HTML(label="生成的表格輸出", show_label=True)
+
+        submit_button = gr.Button("生成表格")
+
+        with gr.Row():
+            with gr.Column():
+                crop_table_results = gr.Gallery(label="偵測表格結果", format="jpeg")
 
             with gr.Column():
                 model_name = gr.Dropdown(
                     choices=[
-                        "OCR",
                         "OCR II",
                     ],
-                    label="OCR模型",
+                    label="模型",
                     value="OCR II",
                 )
                 system_prompt_input = gr.Textbox(label="輸入系統文字提示", lines=2, value=_default_system_prompt)
@@ -294,23 +312,16 @@ def main(
                 max_tokens = gr.Slider(label="Max tokens", value=4096, minimum=1, maximum=8192, step=1)
                 detect_table = gr.Checkbox(label="是否自動偵測表格", value=True)
                 crop_table_padding = gr.Slider(label="偵測表格裁切框 padding", value=-60, minimum=-300, maximum=300, step=1)
-                repair_latex = gr.Checkbox(value=True, label="修復 latex")
-                full_border = gr.Checkbox(label="修復 latex 表格全框線")
-                unsqueeze = gr.Checkbox(label="修復 latex 並解開多行/列合併")
+                repair_latex = gr.Checkbox(value=True, label="修復 latex", visible=dev_mode)
+                full_border = gr.Checkbox(label="修復 latex 表格全框線", visible=dev_mode)
+                unsqueeze = gr.Checkbox(label="修復 latex 並解開多行/列合併", visible=dev_mode)
                 time_usage = gr.Textbox(label="每秒幾個 token")
 
-        submit_button = gr.Button("生成表格")
-        ocr_result = gr.Textbox(label="生成的文字輸出")
+        ocr_result = gr.Textbox(label="生成的文字輸出", visible=dev_mode)
+
         # examples = gr.Examples(
         #     examples=[],
         # )
-
-        with gr.Row():
-            with gr.Column():
-                crop_table_results = gr.Gallery(label="偵測表格結果", format="jpeg")
-
-            with gr.Column():
-                html_result = gr.HTML(label="生成的表格輸出", show_label=True)
 
         model_name.change(task_update, inputs=[model_name], outputs=[])
 
