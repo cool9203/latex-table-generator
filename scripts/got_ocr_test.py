@@ -62,6 +62,7 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=30308, help="Server port")
     parser.add_argument("--device_map", type=str, default="cuda:0", help="Run model device map")
     parser.add_argument("--dev", dest="dev_mode", action="store_true", help="Dev mode")
+    parser.add_argument("--example_folder", type=str, default="example", help="Example folder")
 
     args = parser.parse_args()
 
@@ -253,6 +254,7 @@ def main(
     port: int,
     device_map: str = "cuda:0",
     dev_mode: bool = False,
+    example_folder: str = "examples",
 ):
     global model, tokenizer, template, engine
     model, tokenizer = get_model_tokenizer(
@@ -319,9 +321,38 @@ def main(
 
         ocr_result = gr.Textbox(label="生成的文字輸出", visible=dev_mode)
 
-        # examples = gr.Examples(
-        #     examples=[],
-        # )
+        # Examples
+        examples = gr.Examples(
+            examples=[
+                [
+                    str(path.resolve()),
+                    _default_prompt,
+                    True,
+                    -60,
+                    4096,
+                    "OCR II",
+                    _default_system_prompt,
+                    True,
+                    False,
+                    False,
+                ]
+                for path in Path(example_folder).iterdir()
+                if path.suffix.lower() in [".jpg", ".png"]
+            ],
+            example_labels=[path.name for path in Path(example_folder).iterdir() if path.suffix.lower() in [".jpg", ".png"]],
+            inputs=[
+                image_input,
+                prompt_input,
+                detect_table,
+                crop_table_padding,
+                max_tokens,
+                model_name,
+                system_prompt_input,
+                repair_latex,
+                full_border,
+                unsqueeze,
+            ],
+        )
 
         model_name.change(task_update, inputs=[model_name], outputs=[])
 
