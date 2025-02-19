@@ -22,6 +22,7 @@ import spaces
 import torch
 import utils
 from flask import Flask, jsonify, request
+from gradio_client import Client, handle_file
 from PIL import Image
 from swift.llm import InferRequest, ModelType, PtEngine, RequestConfig, TemplateType, get_model_tokenizer, get_template
 from swift.tuners import Swift
@@ -82,8 +83,8 @@ def inference_table(
     full_border: bool = False,
     unsqueeze: bool = False,
 ):
-    if model_name not in ["OCR II"]:
-        raise ValueError("Model not exists, should be ['OCR II']")
+    if model_name not in ["QOCR", "GOCR"]:
+        raise ValueError("Model not exists, should be ['QOCR', 'GOCR']")
 
     _image = Image.open(image) if isinstance(image, str) else image
     origin_response = list()
@@ -117,30 +118,61 @@ def inference_table(
             for _image in images:
                 image_path = str(Path(temp_dir, f"{str(uuid.uuid4())}.png"))
                 _image.save(image_path)
-                infer_request = InferRequest(
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": system_prompt,
-                        },
-                        {
-                            "role": "user",
-                            "content": [
+                if model_name == "QOCR":
+                    try:
+                        # 傳送圖片給 API
+                        client = Client("http://10.70.0.232:7861/")
+                        result = client.predict(
+                            chatbot=[
                                 {
-                                    "type": "image",
-                                    "image": str(image_path),
-                                },
-                                {"type": "text", "text": prompt},
+                                    "role": "user",
+                                    "metadata": {"title": None, "id": None, "parent_id": None, "duration": None, "status": None},
+                                    "content": "Please describe the picture using HTML while considering merged columns and merged row cells.",
+                                    "options": None,
+                                }
                             ],
-                        },
-                    ]
-                )
-                request_config = RequestConfig(max_tokens=max_tokens, temperature=0)
-                resp_list = engine.infer([infer_request], request_config)
-                end_time = time.time()
+                            lang=None,
+                            system="en",
+                            tools="",
+                            image=handle_file(image_path),
+                            video=None,
+                            audio=None,
+                            max_new_tokens=max_tokens,
+                            top_p=1.0,
+                            temperature=0.0,
+                            api_name="/stream",
+                        )
+                    except Exception as e:
+                        print(e)
+                        traceback.print_exception(e)
+                    end_time = time.time()
 
-                response = resp_list[0].choices[0].message.content
-                tokens += resp_list[0].usage.completion_tokens
+                    response = result[1]["content"]
+                    tokens += len(response)
+                elif model_name == "GOCR":
+                    infer_request = InferRequest(
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": system_prompt,
+                            },
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "image",
+                                        "image": str(image_path),
+                                    },
+                                    {"type": "text", "text": prompt},
+                                ],
+                            },
+                        ]
+                    )
+                    request_config = RequestConfig(max_tokens=max_tokens, temperature=0)
+                    resp_list = engine.infer([infer_request], request_config)
+                    end_time = time.time()
+                    response = resp_list[0].choices[0].message.content
+                    tokens += resp_list[0].usage.completion_tokens
 
                 # Process the LaTeX code response
                 response = response.replace("罩位重", "單位重").replace(
@@ -155,7 +187,7 @@ def inference_table(
 
                 # Convert LaTeX to HTML
                 try:
-                    if repair_latex:
+                    if repair_latex and model_name == "GOCR":
                         origin_response.append(
                             utils.convert_pandas_to_latex(
                                 df=utils.convert_latex_table_to_pandas(
@@ -172,7 +204,11 @@ def inference_table(
                     print("Error converting LaTeX to HTML:", e)
                     raise e
 
-            html_table = pypandoc.convert_text("".join(origin_response), "html", format="latex")
+            html_table = pypandoc.convert_text(
+                "".join(origin_response),
+                "html",
+                format="html" if model_name == "QOCR" else "latex",
+            )
             html_content = f"""
         <!DOCTYPE html>
         <html lang="zh-TW">
@@ -299,15 +335,16 @@ def main(
 
         with gr.Row():
             with gr.Column():
-                crop_table_results = gr.Gallery(label="偵測表格結果", format="jpeg")
+                crop_table_results = gr.Gallery(label="偵測表格結果", format="png")
 
             with gr.Column():
                 model_name = gr.Dropdown(
                     choices=[
-                        "OCR II",
+                        "QOCR",
+                        "GOCR",
                     ],
                     label="模型",
-                    value="OCR II",
+                    value="GOCR",
                 )
                 system_prompt_input = gr.Textbox(label="輸入系統文字提示", lines=2, value=_default_system_prompt)
                 prompt_input = gr.Textbox(label="輸入文字提示", lines=2, value=_default_prompt)
@@ -330,16 +367,18 @@ def main(
                     True,
                     -60,
                     4096,
-                    "OCR II",
+                    "GOCR",
                     _default_system_prompt,
                     True,
                     False,
                     False,
                 ]
                 for path in Path(example_folder).iterdir()
-                if path.suffix.lower() in [".jpg", ".png"]
+                if path.suffix.lower() in [".jpg", ".jpeg", ".png"]
             ],
-            example_labels=[path.name for path in Path(example_folder).iterdir() if path.suffix.lower() in [".jpg", ".png"]],
+            example_labels=[
+                path.name for path in Path(example_folder).iterdir() if path.suffix.lower() in [".jpg", ".jpeg", ".png"]
+            ],
             inputs=[
                 image_input,
                 prompt_input,
