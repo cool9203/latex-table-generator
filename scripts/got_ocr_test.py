@@ -96,7 +96,7 @@ def inference_table(
     try:
         with TemporaryDirectory() as temp_dir:
             if detect_table:
-                image_path = str(Path(temp_dir, f"{str(uuid.uuid4())}.jpg"))
+                image_path = str(Path(temp_dir, f"{str(uuid.uuid4())}.png"))
                 _image.save(image_path)
                 resp = httpx.post(
                     "http://10.70.0.232:9999/upload",
@@ -115,7 +115,7 @@ def inference_table(
 
             start_time = time.time()
             for _image in images:
-                image_path = str(Path(temp_dir, f"{str(uuid.uuid4())}.jpg"))
+                image_path = str(Path(temp_dir, f"{str(uuid.uuid4())}.png"))
                 _image.save(image_path)
                 infer_request = InferRequest(
                     messages=[
@@ -376,6 +376,7 @@ def main(
         server_name=host,
         server_port=port,
         share=False,  # Reference: https://github.com/gradio-app/gradio/issues/7978#issuecomment-2567283591
+        root_path="/iiiSteelOCR",
     )
 
 
