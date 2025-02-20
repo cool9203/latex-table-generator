@@ -3,6 +3,7 @@
 import ast
 import json
 import logging
+import os
 import re
 from os import PathLike
 from pathlib import Path
@@ -25,6 +26,7 @@ _latex_multirow_pattern = r"\\multirow{(\d+)}{([\*\d]+)}{(.*)}"
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
+logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 
 def get_subfolder_path(
