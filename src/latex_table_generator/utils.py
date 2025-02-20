@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+from io import StringIO
 from os import PathLike
 from pathlib import Path
 from typing import Any, List, Sequence, Tuple, Union
@@ -13,6 +14,8 @@ import numpy as np
 import pandas as pd
 
 from latex_table_generator.errors import (
+    FormatError,
+    NotHtmlError,
     NotLatexError,
     NotSupportLatexError,
     NotSupportMultiLatexTableError,
@@ -22,6 +25,8 @@ _latex_table_begin_pattern = r"\\begin{tabular}{[lrc|]*}"
 _latex_table_end_pattern = r"\\end{tabular}"
 _latex_multicolumn_pattern = r"\\multicolumn{(\d+)}{([lrc|]+)}{(.*)}"
 _latex_multirow_pattern = r"\\multirow{(\d+)}{([\*\d]+)}{(.*)}"
+_html_table_begin_pattern = r"<table>[\s\w]*(?:<thead>)?"
+_html_table_end_pattern = r"</table>"
 
 
 logger = logging.getLogger(__name__)
@@ -62,6 +67,21 @@ def get_subfolder_path(
     return subfolder_paths
 
 
+def _remove_all_space_row(
+    rows: list[list[Any]],
+) -> list[list[str]]:
+    cleaned_rows = list()
+    for row in rows:
+        _row_data = list()
+        for cell in row:
+            _row_data.append(str(cell).strip())
+        if len("".join(_row_data)) == 0:
+            continue
+        else:
+            cleaned_rows.append(_row_data)
+    return cleaned_rows
+
+
 def preprocess_latex_table_string(
     latex_table_str: str,
 ) -> str:
@@ -80,6 +100,14 @@ def preprocess_latex_table_string(
         new_rows.append(_row)
 
     return "\\\\\n".join(new_rows)
+
+
+def is_latex_table(table_str: str):
+    return len(re.findall(_latex_table_begin_pattern, table_str)) >= 1
+
+
+def is_html_table(table_str: str):
+    return len(re.findall(_html_table_begin_pattern, table_str)) >= 1
 
 
 def pre_check_latex_table_string(
@@ -101,6 +129,7 @@ def convert_latex_table_to_pandas(
     headers: Union[bool, Sequence[str], None] = None,
     unsqueeze: bool = False,
     remove_all_space_row: bool = False,
+    **kwds,
 ) -> pd.DataFrame:
     pre_check_latex_table_string(latex_table_str=latex_table_str)
     processed_latex_table_str = preprocess_latex_table_string(latex_table_str)
@@ -115,9 +144,10 @@ def convert_latex_table_to_pandas(
     table_data = [row.replace(r"\\", "").replace(r"\hline", "").replace(r"\cline", "").strip().split("&") for row in rows]
     for row in table_data:
         _row_data = list()
-        for cell in row:
-            if re.match(_latex_multicolumn_pattern, cell):
-                multicolumn_data = re.findall(_latex_multicolumn_pattern, cell)[0]
+        for cell_text in row:
+            _cell_text = cell_text.strip()
+            if re.match(_latex_multicolumn_pattern, _cell_text):
+                multicolumn_data = re.findall(_latex_multicolumn_pattern, _cell_text)[0]
                 for index in range(int(multicolumn_data[0])):
                     if unsqueeze:
                         _row_data.append(multicolumn_data[2].strip())
@@ -129,11 +159,8 @@ def convert_latex_table_to_pandas(
                         else:
                             _row_data.append("")
             else:
-                _row_data.append(cell.strip())
-        if remove_all_space_row and len("".join(_row_data)) == 0:
-            continue
-        else:
-            cleaned_data.append(_row_data)
+                _row_data.append(_cell_text)
+        cleaned_data.append(_row_data)
 
     # Process multirow
     for col in range(len(cleaned_data)):
@@ -152,6 +179,9 @@ def convert_latex_table_to_pandas(
                         if col + offset >= len(cleaned_data):
                             break
                         cleaned_data[col + offset][row] = ""
+
+    if remove_all_space_row:
+        cleaned_data = _remove_all_space_row(rows=cleaned_data)
 
     try:
         if headers:
@@ -206,6 +236,58 @@ def convert_pandas_to_latex(
     latex_table_str += r"\end{tabular}"
 
     return latex_table_str
+
+
+def convert_html_table_to_pandas(
+    html_table_str: str,
+    remove_all_space_row: bool = False,
+    **kwds,
+) -> pd.DataFrame:
+    try:
+        with StringIO(html_table_str) as f:
+            dfs = pd.read_html(
+                io=f,
+                keep_default_na=False,
+            )
+
+        if remove_all_space_row:
+            return [
+                pd.DataFrame(
+                    _remove_all_space_row(rows=df.values.tolist()),
+                    columns=df.columns,
+                )
+                for df in dfs
+            ][0]
+        else:
+            return dfs[0]
+    except Exception:
+        raise NotHtmlError("This table str not is html")
+
+
+def convert_table_to_pandas(
+    table_str: str,
+    headers: Union[bool, Sequence[str], None] = None,
+    unsqueeze: bool = False,
+    remove_all_space_row: bool = False,
+    **kwds,
+) -> pd.DataFrame:
+    if is_latex_table(table_str):
+        return convert_latex_table_to_pandas(
+            latex_table_str=table_str,
+            headers=headers,
+            unsqueeze=unsqueeze,
+            remove_all_space_row=remove_all_space_row,
+            **kwds,
+        )
+    elif is_html_table(table_str):
+        return convert_html_table_to_pandas(
+            html_table_str=table_str,
+            unsqueeze=unsqueeze,
+            remove_all_space_row=remove_all_space_row,
+            **kwds,
+        )
+    else:
+        raise FormatError("Not Support convert the format table")
 
 
 def load_render_header_file(
