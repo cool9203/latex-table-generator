@@ -314,10 +314,10 @@ def main(
             os.makedirs(folder)
 
     with gr.Blocks(
-        title="GOT-OCR 生成表格測試網站",
+        title="沛波鋼鐵辨識測試網站",
         css="#component-6 { max-height: 85vh; }",
     ) as demo:
-        gr.Markdown("## GOT-OCR 生成表格測試網站")
+        gr.Markdown("## 沛波鋼鐵辨識測試網站")
 
         with gr.Row():
             with gr.Column():
@@ -359,26 +359,31 @@ def main(
         ocr_result = gr.Textbox(label="生成的文字輸出", visible=dev_mode)
 
         # Examples
+        example_files = sorted(
+            [
+                (str(path.resolve()), path.name)
+                for path in Path(example_folder).iterdir()
+                if path.suffix.lower() in [".jpg", ".jpeg", ".png"]
+            ],
+            key=lambda e: e[1],
+        )
         examples = gr.Examples(
             examples=[
                 [
-                    str(path.resolve()),
+                    path,
                     _default_prompt,
                     True,
                     -60,
                     4096,
-                    "GOCR",
+                    "QOCR" if "標準" in name else "GOCR",
                     _default_system_prompt,
                     True,
                     False,
                     False,
                 ]
-                for path in Path(example_folder).iterdir()
-                if path.suffix.lower() in [".jpg", ".jpeg", ".png"]
+                for path, name in example_files
             ],
-            example_labels=[
-                path.name for path in Path(example_folder).iterdir() if path.suffix.lower() in [".jpg", ".jpeg", ".png"]
-            ],
+            example_labels=[name for path, name in example_files],
             inputs=[
                 image_input,
                 prompt_input,
