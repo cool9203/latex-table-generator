@@ -170,7 +170,8 @@ class Steel(ImageBase):
         font_color: Union[str, Tuple[int, int, int]] = (0, 0, 0),
         size: Tuple[int, int] = None,
         rng: random.Random = None,
-        fraction: float = 0.5,
+        max_fraction: float = 0.7,
+        min_fraction: float = 0.3,
     ) -> Tuple[PILImage.Image, str]:
         rng = rng if rng else self.rng
         roles = roles if roles else self.roles
@@ -192,8 +193,8 @@ class Steel(ImageBase):
             if role.after_choices:
                 text += role.after_choices[rng.randint(0, len(role.after_choices) - 1)]
 
-            start_x = role.x1 + rng.randint(0, int((role.x2 - role.x1) * fraction))
-            start_y = role.y1 + rng.randint(0, int((role.y2 - role.y1) * fraction))
+            start_x = role.x1 + rng.randint(int((role.x2 - role.x1) * min_fraction), int((role.x2 - role.x1) * max_fraction))
+            start_y = role.y1 + rng.randint(int((role.y2 - role.y1) * min_fraction), int((role.y2 - role.y1) * max_fraction))
             _font = _get_fit_font_size(
                 text=text,
                 size=(start_x, start_y, role.x2, role.y2),
@@ -234,11 +235,13 @@ class NormalImage(ImageBase):
 
 
 def load_image(
-    image_paths: List[PathLike],
+    image_paths: List[PathLike] | str,
     extensions: List[str] = [".png", ".jpg", ".jpeg"],
     rng: random.Random = None,
 ) -> List[Steel]:
     rng = rng if rng else random.Random()
+    image_paths = [image_paths] if isinstance(image_paths, str) else image_paths
+
     _image_paths = list()
     for image_path in image_paths:
         image_path = Path(image_path)
@@ -261,13 +264,54 @@ def load_image(
 
 
 if __name__ == "__main__":
-    rng = random.Random(10)
-    steels = load_image(
-        image_paths=["./images/steels"],
+    from uuid import uuid4
+
+    import tqdm as TQDM
+    from imgaug import augmenters as iaa
+
+    from latex_table_generator.base import get_image
+
+    image_paths = "./steels"
+    output_path = "./outputs/random-steels"
+    image_size = (644, 644)
+    count = 500
+    rng = random.Random(42)
+
+    image_augmenter = iaa.OneOf(
+        [
+            iaa.AdditiveGaussianNoise(scale=(0, 30)),
+            iaa.AdditiveGaussianNoise(scale=(0, 30), per_channel=True),
+            iaa.SaltAndPepper(p=(0, 0.1)),
+            iaa.GaussianBlur(sigma=(0, 2.0)),
+            iaa.JpegCompression(compression=(0, 85)),
+            iaa.AverageBlur(k=(1, 5)),
+        ],
+    )
+
+    Path(output_path).mkdir(parents=True, exist_ok=True)
+
+    base_images = load_image(
+        image_paths,
         rng=rng,
     )
 
-    for steel in steels:
-        (image, label) = steel.generate()
-        logger.debug(label)
-        image.show()
+    for steel in TQDM.tqdm(base_images):
+        for i in TQDM.tqdm(range(count), leave=False):
+            (generate_image, generate_image_label) = steel.random_generate(rng=rng)
+
+            name = str(uuid4())
+            save_path = Path(
+                output_path,
+                Path(steel.image_path).name.replace(Path(steel.image_path).suffix, ""),
+            )
+            generate_image_path = Path(save_path, f"{name}.png")
+            generate_image_label_path = Path(save_path, f"{name}.txt")
+            save_path.mkdir(exist_ok=True)
+
+            generate_image = generate_image.convert("RGB")
+            generate_image = image_resize(src=generate_image, size=image_size)
+            generate_image = PILImage.fromarray(image_augmenter(images=[get_image(generate_image)])[0])
+            generate_image.save(generate_image_path)
+
+            with generate_image_label_path.open("w", encoding="utf-8") as f:
+                f.write(generate_image_label)
