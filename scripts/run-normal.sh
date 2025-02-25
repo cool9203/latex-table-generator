@@ -19,4 +19,6 @@ LOG_LEVEL=INFO \
     --add_space_row_percentage 0.3 \
     --dropout_percentage 0.3 \
     --merge_methods "none" \
+    --steel_augment \
+    --image_augment \
     --tqdm

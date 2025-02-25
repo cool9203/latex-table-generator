@@ -111,6 +111,8 @@ def arg_parser() -> argparse.Namespace:
         default=None,
         help="Dropout table content percentage",
     )
+    parser.add_argument("--steel_augment", action="store_true", help="Augment steel image")
+    parser.add_argument("--image_augment", action="store_true", help="Augment generate image")
 
     parser.add_argument("--tqdm", action="store_true", help="Use tqdm to show progress bar")
 

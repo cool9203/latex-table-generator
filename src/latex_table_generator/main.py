@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 import pypandoc
 import tqdm as TQDM
+from imgaug import augmenters as iaa
 from matplotlib import pyplot as plt
 from packaging.version import Version
 from PIL import Image as PILImage
@@ -51,6 +52,16 @@ from latex_table_generator.utils import (
 _image_extensions = {ex for ex, f in PILImage.registered_extensions().items() if f in PILImage.OPEN}
 _support_merge_methods = ["horizontal", "vertical", "hybrid", "none"]
 _latex_includegraphics_pattern = r"\\includegraphics{(.*.(?:jpg|png|JPG|PNG))}"
+_image_augmenter = iaa.OneOf(
+    [
+        iaa.AdditiveGaussianNoise(scale=(0, 30)),
+        iaa.AdditiveGaussianNoise(scale=(0, 30), per_channel=True),
+        iaa.SaltAndPepper(p=(0, 0.1)),
+        iaa.GaussianBlur(sigma=(0, 2.0)),
+        iaa.JpegCompression(compression=(0, 85)),
+        iaa.AverageBlur(k=(1, 5)),
+    ],
+)
 
 _default_css = r"""<style>
     table,
@@ -664,7 +675,7 @@ def paste_fit_size_latex_table_to_image(
     max_paddings: float = 3.0,
     step: float = -0.2,
     paste_vertical: bool = False,
-) -> Tuple[PILImage.Image, List[Tuple[int, int, int, int]]]:
+) -> Tuple[MatLike, List[Tuple[int, int, int, int]]]:
     """Paste table image to passed image, will auto calc generate image size.
 
     Args:
@@ -680,7 +691,7 @@ def paste_fit_size_latex_table_to_image(
         paste_vertical (bool, optional): paste image is vertical. Defaults to False.
 
     Returns:
-        Tuple[PILImage.Image, List[Tuple[int, int, int, int]]]: (pasted image, table position: [(x1, y1, x2, y2)])
+        Tuple[MatLike, List[Tuple[int, int, int, int]]]: (pasted image, table position: [(x1, y1, x2, y2)])
     """
     file_image: MatLike = get_image(src=file_image)
     step = step if step < 0 else (-1) * step
@@ -838,6 +849,8 @@ def main(
     dropout_percentage: float = None,
     image_size: Tuple[int, int] = (200, 200),
     base_image_background_color: Tuple[int, int, int] = (255, 255, 255),
+    steel_augment: bool = True,
+    image_augment: bool = True,
     tqdm: bool = True,
     **kwds,
 ):
@@ -945,6 +958,8 @@ def main(
                     generate_image_path = Path(steel_temp_dir, f"{name}.jpg")
                     generate_image = generate_data[0].convert("RGB")
                     generate_image = image_resize(src=generate_image, size=image_size)
+                    if steel_augment:
+                        generate_image = PILImage.fromarray(_image_augmenter(images=[get_image(generate_image)])[0])
                     generate_image.save(generate_image_path, quality=100)
                     generate_images.append(str(generate_image_path.resolve()))
 
@@ -1028,6 +1043,10 @@ def main(
                     )
                     if final_image is None:
                         raise ImagePasteError("Can't paste image")
+
+                    # Augment final image
+                    if image_augment:
+                        final_image = _image_augmenter(images=[final_image])[0]
 
                     # Convert image to label
                     latex_table_image_results = [latex_table_merged_str[0] for latex_table_merged_str in latex_table_merged_strs]

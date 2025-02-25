@@ -22,4 +22,6 @@ LOG_LEVEL=INFO \
     --merge_methods "horizontal" "vertical" "hybrid" "none" \
     --html_label_cell_merge \
     --latex_label_cell_merge \
+    --steel_augment \
+    --image_augment \
     --tqdm
