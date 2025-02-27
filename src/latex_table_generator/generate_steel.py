@@ -1,28 +1,63 @@
 # coding: utf-8
 
+import decimal
 import json
 import logging
+import os
 import random
 from dataclasses import dataclass, field
 from os import PathLike
 from pathlib import Path
-from typing import List, Sequence, Tuple, Union
+from typing import Dict, List, Sequence, Tuple, Union
 
 from PIL import Image as PILImage
 from PIL import ImageDraw, ImageFont
 
+from latex_table_generator import utils
 from latex_table_generator.base import image_resize
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
-logger.setLevel("INFO")
+logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
+
+ctx = decimal.Context()
+ctx.prec = 20
+
+
+@dataclass
+class Position:
+    x1: float
+    x2: float
+    y1: float
+    y2: float
+
+    def to_list(self) -> Sequence[float]:
+        return (self.x1, self.y1, self.x2, self.y2)
+
+
+@dataclass
+class SteelRole(Position):
+    angle: bool = False
+    range: Sequence[Union[int, float]] = field(default_factory=[1, 1000])
+    choices: Sequence[str] = field(default_factory=[])
+    before_choices: Sequence[str] = field(default_factory=[])
+    after_choices: Sequence[str] = field(default_factory=[])
+
+
+@dataclass
+class ImageBase:
+    origin_image: PILImage.Image
+    image: PILImage.Image
+    role_path: PathLike
+    image_path: PathLike
+    size: Tuple[int, int]
 
 
 def _get_fit_font_size(
     text: str,
     size: Tuple[int, int, int, int],
     font: str,
-) -> ImageFont:
+) -> Tuple[ImageFont.FreeTypeFont, Position]:
     # Edit from: https://stackoverflow.com/a/61891053
     font_size = 1
     jump_size = 75
@@ -42,33 +77,20 @@ def _get_fit_font_size(
 
         if jump_size <= 1:
             break
-    return _font
-
-
-@dataclass
-class SteelRole:
-    x1: float
-    x2: float
-    y1: float
-    y2: float
-    angle: bool = False
-    range: Sequence[Union[int, float]] = field(default_factory=[1, 1000])
-    choices: Sequence[str] = field(default_factory=[])
-    before_choices: Sequence[str] = field(default_factory=[])
-    after_choices: Sequence[str] = field(default_factory=[])
-
-
-@dataclass
-class ImageBase:
-    origin_image: PILImage.Image
-    image: PILImage.Image
-    role_path: PathLike
-    image_path: PathLike
-    size: Tuple[int, int]
+    return (
+        _font,
+        Position(
+            x1=text_bbox[0],
+            x2=text_bbox[2],
+            y1=text_bbox[1],
+            y2=text_bbox[3],
+        ),
+    )
 
 
 @dataclass
 class Steel(ImageBase):
+    position: Position = None
     rotate_angle: float = 0.0
     roles: List[SteelRole] = field(default_factory=[])
     rng: random.Random = None
@@ -91,6 +113,10 @@ class Steel(ImageBase):
             self.role_path = Path(self.image_path.parent, f"{self.image_path.stem}.json")
         with self.role_path.open("r", encoding="utf-8") as f:
             data = json.load(f)
+
+        if data.get("position", None):
+            self.position = Position(**data.get("position"))
+
         for role in data.get("roles"):
             self.roles.append(SteelRole(**role))
 
@@ -153,7 +179,7 @@ class Steel(ImageBase):
             if role.after_choices:
                 text += role.after_choices[rng.randint(0, len(role.after_choices) - 1)]
 
-            _font = _get_fit_font_size(
+            (_font, text_position) = _get_fit_font_size(
                 text=text,
                 size=(role.x1, role.y1, role.x2, role.y2),
                 font=font,
@@ -165,44 +191,69 @@ class Steel(ImageBase):
 
     def random_generate(
         self,
-        roles: List[SteelRole] = None,
+        count: int,
         font: str = "mingliu.ttc",
         font_color: Union[str, Tuple[int, int, int]] = (0, 0, 0),
         size: Tuple[int, int] = None,
         rng: random.Random = None,
-        max_fraction: float = 0.7,
-        min_fraction: float = 0.3,
-    ) -> Tuple[PILImage.Image, str]:
+        iterations: int = 10,
+    ) -> Tuple[PILImage.Image, List[Dict[str, Union[Position, str]]]]:
         rng = rng if rng else self.rng
-        roles = roles if roles else self.roles
         size = size if size else self.size
 
         image = self.image.copy()
         draw_image = ImageDraw.Draw(image)
-        label_texts = list()
-        for role in roles:
-            text = ""
-            if role.before_choices:
-                text += role.before_choices[rng.randint(0, len(role.before_choices) - 1)]
+        text_labels: List[Dict[str, Union[List[float], str]]] = list()
+        for _ in range(count):
+            text = format(ctx.create_decimal(repr(rng.uniform(1, 10000))), "f")
+            precision = rng.randint(0, 3)
+            text = text.split(".")[0] + ("." + text.split(".")[1][:precision] if precision else "")
 
-            ranges = [n for n in range(*role.range)]
-            text += str(ranges[rng.randint(0, len(ranges) - 1)])
-            if role.angle:
-                text += "°"
+            for iteration in range(iterations):
+                font_size = rng.randint(8, 72)
+                x1 = rng.randint(0, image.width)
+                y1 = rng.randint(0, image.height)
+                logger.debug(f"x1: {x1}, y1: {y1}, font_size: {font_size}")
+                _font = ImageFont.truetype(font, font_size)
+                text_bbox = _font.getbbox(text)
+                text_position = Position(
+                    x1=x1,
+                    x2=x1 + text_bbox[2],
+                    y1=y1,
+                    y2=y1 + text_bbox[3],
+                )
 
-            if role.after_choices:
-                text += role.after_choices[rng.randint(0, len(role.after_choices) - 1)]
+                # Check out size
+                if text_position.x2 > image.width or text_position.y2 > image.height:
+                    continue
 
-            start_x = role.x1 + rng.randint(int((role.x2 - role.x1) * min_fraction), int((role.x2 - role.x1) * max_fraction))
-            start_y = role.y1 + rng.randint(int((role.y2 - role.y1) * min_fraction), int((role.y2 - role.y1) * max_fraction))
-            _font = _get_fit_font_size(
-                text=text,
-                size=(start_x, start_y, role.x2, role.y2),
-                font=font,
-            )
-            draw_image.text((start_x, start_y), text, fill=font_color, font=_font)
-            label_texts.append(text)
-        return (image_resize(src=image, size=size), " ".join(label_texts))
+                # Check overlap
+                is_overlap = utils.check_overlap(a=text_position.to_list(), b=self.position.to_list())
+
+                for text_label in text_labels:
+                    if utils.check_overlap(a=text_position.to_list(), b=text_label.get("position")):
+                        is_overlap = True
+
+                if not is_overlap:
+                    draw_image.text((x1, y1), text, fill=font_color, font=_font)
+                    text_labels.append(
+                        {
+                            "label": text,
+                            "position": text_position.to_list(),
+                        }
+                    )
+                    break
+
+        return (
+            image_resize(src=image, size=size),
+            [
+                {
+                    "label": "steel",
+                    "position": self.position.to_list(),
+                }
+            ]
+            + text_labels,
+        )
 
 
 @dataclass
@@ -267,26 +318,12 @@ if __name__ == "__main__":
     from uuid import uuid4
 
     import tqdm as TQDM
-    from imgaug import augmenters as iaa
-
-    from latex_table_generator.base import get_image
 
     image_paths = "./steels"
     output_path = "./outputs/random-steels"
     image_size = (644, 644)
     count = 500
-    rng = random.Random(42)
-
-    image_augmenter = iaa.OneOf(
-        [
-            iaa.AdditiveGaussianNoise(scale=(0, 30)),
-            iaa.AdditiveGaussianNoise(scale=(0, 30), per_channel=True),
-            iaa.SaltAndPepper(p=(0, 0.1)),
-            iaa.GaussianBlur(sigma=(0, 2.0)),
-            iaa.JpegCompression(compression=(0, 85)),
-            iaa.AverageBlur(k=(1, 5)),
-        ],
-    )
+    rng = random.Random(os.getenv("SEED", 42))
 
     Path(output_path).mkdir(parents=True, exist_ok=True)
 
@@ -297,7 +334,13 @@ if __name__ == "__main__":
 
     for steel in TQDM.tqdm(base_images):
         for i in TQDM.tqdm(range(count), leave=False):
-            (generate_image, generate_image_label) = steel.random_generate(rng=rng)
+            number_count = int(Path(steel.image_path).name.replace("".join(Path(steel.image_path).suffixes), "").split("-")[1])
+            number_count = rng.randint(max(1, number_count - 2), number_count + 2)
+            (generate_image, generate_image_label) = steel.random_generate(
+                rng=rng,
+                count=number_count,
+                iterations=100,
+            )
 
             name = str(uuid4())
             save_path = Path(
@@ -310,8 +353,12 @@ if __name__ == "__main__":
 
             generate_image = generate_image.convert("RGB")
             generate_image = image_resize(src=generate_image, size=image_size)
-            generate_image = PILImage.fromarray(image_augmenter(images=[get_image(generate_image)])[0])
             generate_image.save(generate_image_path)
 
             with generate_image_label_path.open("w", encoding="utf-8") as f:
-                f.write(generate_image_label)
+                json.dump(
+                    obj=generate_image_label,
+                    fp=f,
+                    indent=4,
+                    ensure_ascii=False,
+                )

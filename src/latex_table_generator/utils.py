@@ -67,6 +67,22 @@ def get_subfolder_path(
     return subfolder_paths
 
 
+def check_overlap(
+    a: Tuple[int, int, int, int],
+    b: Tuple[int, int, int, int],
+) -> bool:
+    """Algorithm reference from: https://stackoverflow.com/a/306332
+
+    Args:
+        a (Tuple[int, int, int, int]): (x1, y1, x2, y2)
+        b (Tuple[int, int, int, int]): (x1, y1, x2, y2)
+
+    Returns:
+        bool: two image is overlap
+    """
+    return a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1]
+
+
 def _remove_all_space_row(
     rows: list[list[Any]],
 ) -> list[list[str]]:
