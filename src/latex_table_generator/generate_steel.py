@@ -315,25 +315,29 @@ def load_image(
 
 
 if __name__ == "__main__":
+    import argparse
     from uuid import uuid4
 
     import tqdm as TQDM
 
-    image_paths = "./steels"
-    output_path = "./outputs/random-steels"
-    image_size = (644, 644)
-    count = 500
-    rng = random.Random(os.getenv("SEED", 42))
+    parser = argparse.ArgumentParser(description="Generate steel image")
+    parser.add_argument("-o", "--output_path", required=True, help="Output path")
+    parser.add_argument("-i", "--input_paths", type=str, nargs="+", default=[], help="Input path(folder)")
+    parser.add_argument("-c", "--count", type=int, default=None, help="Full random generate latex table")
 
-    Path(output_path).mkdir(parents=True, exist_ok=True)
+    args = parser.parse_args()
+
+    rng = random.Random(os.getenv("SEED", None))
+
+    Path(args.output_path).mkdir(parents=True, exist_ok=True)
 
     base_images = load_image(
-        image_paths,
+        args.input_paths,
         rng=rng,
     )
 
     for steel in TQDM.tqdm(base_images):
-        for i in TQDM.tqdm(range(count), leave=False):
+        for i in TQDM.tqdm(range(args.count), leave=False):
             number_count = int(Path(steel.image_path).name.replace("".join(Path(steel.image_path).suffixes), "").split("-")[1])
             number_count = rng.randint(max(1, number_count - 2), number_count + 2)
             (generate_image, generate_image_label) = steel.random_generate(
@@ -344,7 +348,7 @@ if __name__ == "__main__":
 
             name = str(uuid4())
             save_path = Path(
-                output_path,
+                args.output_path,
                 Path(steel.image_path).name.replace(Path(steel.image_path).suffix, ""),
             )
             generate_image_path = Path(save_path, f"{name}.png")
@@ -352,7 +356,7 @@ if __name__ == "__main__":
             save_path.mkdir(exist_ok=True)
 
             generate_image = generate_image.convert("RGB")
-            generate_image = image_resize(src=generate_image, size=image_size)
+            generate_image = image_resize(src=generate_image, size=None)
             generate_image.save(generate_image_path)
 
             with generate_image_label_path.open("w", encoding="utf-8") as f:
