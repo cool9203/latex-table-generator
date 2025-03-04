@@ -189,7 +189,7 @@ def image_resize(
     scale: float = None,
 ) -> PILImage.Image:
     # interpolation reference: https://stackoverflow.com/questions/23853632/which-kind-of-interpolation-best-for-resizing-image
-    if size:
+    if size and size != src.size:
         image = get_image(src=src)
         scale = scale if scale else min(size[0] / image.shape[0], size[1] / image.shape[1])
         interpolation = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
