@@ -10,11 +10,12 @@ from os import PathLike
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple, Union
 
+import numpy as np
 from PIL import Image as PILImage
 from PIL import ImageDraw, ImageFont
 
 from latex_table_generator import utils
-from latex_table_generator.base import image_resize
+from latex_table_generator.base import get_image, image_resize, paste_image_with_table_bbox, rotate_img_with_border
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
@@ -197,13 +198,46 @@ class Steel(ImageBase):
         size: Tuple[int, int] = None,
         rng: random.Random = None,
         iterations: int = 10,
+        steel_rotate: Tuple[float, float] = None,
+        steel_size_scale: Tuple[float, float] = None,
     ) -> Tuple[PILImage.Image, List[Dict[str, Union[Position, str]]]]:
         rng = rng if rng else self.rng
-        size = size if size else self.size
+        size = size if size else (self.size if self.size else self.image.size)
 
-        image = self.image.copy()
+        image = PILImage.new(mode="RGB", size=size, color=(255, 255, 255))
+
+        # Paste steel image
+        steel_image = get_image(self.image.convert("RGB"))[
+            self.position.y1 : self.position.y2, self.position.x1 : self.position.x2
+        ]
+        if steel_rotate:
+            steel_image = rotate_img_with_border(img=steel_image, angle=rng.uniform(steel_rotate[0], steel_rotate[1]))
+        if steel_size_scale:
+            scale = rng.uniform(steel_size_scale[0], steel_size_scale[1])
+            steel_image = get_image(
+                image_resize(
+                    src=steel_image,
+                    size=(min(steel_image.shape[0] * scale, image.size[1]), min(steel_image.shape[1] * scale, image.size[0])),
+                )
+            )
+
+        (image, steel_position) = paste_image_with_table_bbox(
+            src=image,
+            dst=steel_image,
+            position=(
+                rng.randint(0, image.size[0] - steel_image.shape[1]) if image.size[0] - steel_image.shape[1] > 0 else 0,
+                rng.randint(0, image.size[1] - steel_image.shape[0]) if image.size[1] - steel_image.shape[0] > 0 else 0,
+            ),
+        )
+        image = PILImage.fromarray(image)
+
         draw_image = ImageDraw.Draw(image)
-        text_labels: List[Dict[str, Union[List[float], str]]] = list()
+        labels: List[Dict[str, Union[List[float], str]]] = [
+            {
+                "label": "steel",
+                "position": steel_position,
+            },
+        ]
         for _ in range(count):
             text = format(ctx.create_decimal(repr(rng.uniform(1, 10000))), "f")
             precision = rng.randint(0, 3)
@@ -228,15 +262,14 @@ class Steel(ImageBase):
                     continue
 
                 # Check overlap
-                is_overlap = utils.check_overlap(a=text_position.to_list(), b=self.position.to_list())
-
-                for text_label in text_labels:
-                    if utils.check_overlap(a=text_position.to_list(), b=text_label.get("position")):
+                is_overlap = False
+                for label in labels:
+                    if utils.check_overlap(a=text_position.to_list(), b=label.get("position")):
                         is_overlap = True
 
                 if not is_overlap:
                     draw_image.text((x1, y1), text, fill=font_color, font=_font)
-                    text_labels.append(
+                    labels.append(
                         {
                             "label": text,
                             "position": text_position.to_list(),
@@ -246,13 +279,7 @@ class Steel(ImageBase):
 
         return (
             image_resize(src=image, size=size),
-            [
-                {
-                    "label": "steel",
-                    "position": self.position.to_list(),
-                }
-            ]
-            + text_labels,
+            labels,
         )
 
 
@@ -319,13 +346,28 @@ if __name__ == "__main__":
     from uuid import uuid4
 
     import tqdm as TQDM
+    from imgaug import augmenters as iaa
 
     parser = argparse.ArgumentParser(description="Generate steel image")
     parser.add_argument("-o", "--output_path", required=True, help="Output path")
     parser.add_argument("-i", "--input_paths", type=str, nargs="+", default=[], help="Input path(folder)")
-    parser.add_argument("-c", "--count", type=int, default=None, help="Full random generate latex table")
+    parser.add_argument("-c", "--count", type=int, default=None, help="Generate count")
+    parser.add_argument("--image_augment", action="store_true", help="Use image augment")
+    parser.add_argument("--rotate", type=float, nargs="+", default=None, help="Rotate range")
+    parser.add_argument("--size_scale", type=float, nargs="+", default=None, help="Size scale range")
 
     args = parser.parse_args()
+
+    _image_augmenter = iaa.OneOf(
+        [
+            iaa.AdditiveGaussianNoise(scale=(0, 30)),
+            iaa.AdditiveGaussianNoise(scale=(0, 30), per_channel=True),
+            iaa.SaltAndPepper(p=(0, 0.1)),
+            iaa.GaussianBlur(sigma=(0, 2.0)),
+            iaa.JpegCompression(compression=(0, 85)),
+            iaa.AverageBlur(k=(1, 5)),
+        ],
+    )
 
     rng = random.Random(os.getenv("SEED", None))
 
@@ -340,11 +382,14 @@ if __name__ == "__main__":
         for i in TQDM.tqdm(range(args.count), leave=False):
             number_count = int(Path(steel.image_path).name.replace("".join(Path(steel.image_path).suffixes), "").split("-")[1])
             number_count = rng.randint(max(1, number_count - 2), number_count + 2)
-            (generate_image, generate_image_label) = steel.random_generate(
-                rng=rng,
-                count=number_count,
-                iterations=100,
-            )
+            params = {
+                "rng": rng,
+                "count": number_count,
+                "iterations": 100,
+            }
+            params.update(steel_rotate=args.rotate) if args.rotate is not None else None
+            params.update(steel_size_scale=args.size_scale) if args.size_scale is not None else None
+            (generate_image, generate_image_label) = steel.random_generate(**params)
 
             name = str(uuid4())
             save_path = Path(
@@ -357,6 +402,8 @@ if __name__ == "__main__":
 
             generate_image = generate_image.convert("RGB")
             generate_image = image_resize(src=generate_image, size=None)
+            if args.image_augment:
+                generate_image = PILImage.fromarray(_image_augmenter(images=[get_image(generate_image)])[0])
             generate_image.save(generate_image_path)
 
             with generate_image_label_path.open("w", encoding="utf-8") as f:
