@@ -357,6 +357,7 @@ if __name__ == "__main__":
     parser.add_argument("--image_augment", action="store_true", help="Use image augment")
     parser.add_argument("--rotate", type=float, nargs="+", default=None, help="Rotate range")
     parser.add_argument("--size_scale", type=float, nargs="+", default=None, help="Size scale range")
+    parser.add_argument("--fonts_dir", type=str, default="./fonts", help="Fonts folder")
 
     args = parser.parse_args()
 
@@ -372,6 +373,12 @@ if __name__ == "__main__":
     )
 
     rng = random.Random(os.getenv("SEED", None))
+    fonts: list[str] = ["mingliu.ttc"]
+
+    if Path(args.fonts_dir).exists():
+        for p in Path(args.fonts_dir).iterdir():
+            if p.suffix in [".ttf", ".otf", ".ttc"] and p.name not in fonts and p.resolve() not in fonts:
+                fonts.append(p.resolve())
 
     Path(args.output_path).mkdir(parents=True, exist_ok=True)
 
@@ -388,6 +395,7 @@ if __name__ == "__main__":
                 "rng": rng,
                 "count": number_count,
                 "iterations": 100,
+                "font": fonts[rng.randint(0, len(fonts) - 1)],
             }
             params.update(steel_rotate=args.rotate) if args.rotate is not None else None
             params.update(steel_size_scale=args.size_scale) if args.size_scale is not None else None
