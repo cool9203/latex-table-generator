@@ -241,7 +241,9 @@ class Steel(ImageBase):
         for _ in range(count):
             text = format(ctx.create_decimal(repr(rng.uniform(1, 10000))), "f")
             precision = rng.randint(0, 3)
+            angle = rng.uniform(0, 5)
             text = text.split(".")[0] + ("." + text.split(".")[1][:precision] if precision else "")
+            text = text if angle < 4 and precision else f"{text}°"
 
             for iteration in range(iterations):
                 font_size = rng.randint(8, 72)
