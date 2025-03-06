@@ -14,6 +14,7 @@ _image_extension = [
     "bmp",
     "gif",
 ]
+_show_size = (1280, 1280)
 
 
 class RectangleDrawer:
@@ -67,10 +68,10 @@ class RectangleDrawer:
         for rectangle in self.rectangles:
             data.append(
                 {
-                    "x1": rectangle[0],
-                    "x2": rectangle[2],
-                    "y1": rectangle[1],
-                    "y2": rectangle[3],
+                    "x1": int(rectangle[0]),
+                    "x2": int(rectangle[2]),
+                    "y1": int(rectangle[1]),
+                    "y2": int(rectangle[3]),
                     "range": [1, 1000],
                     "angle": False,
                     "choices": [],
@@ -112,7 +113,15 @@ class RectangleDrawer:
         try:
             self.image_path = image_path
             self.image = Image.open(image_path)
-            self.tk_image = ImageTk.PhotoImage(self.image)
+            self.image_scale = min(_show_size[0] / self.image.size[0], _show_size[1] / self.image.size[1])
+            self.tk_image = ImageTk.PhotoImage(
+                self.image.resize(
+                    size=(
+                        int(self.image.size[0] * self.image_scale),
+                        int(self.image.size[1] * self.image_scale),
+                    )
+                )
+            )
 
             self.reset_image()
             self.rectangles = []
@@ -135,10 +144,10 @@ class RectangleDrawer:
         end_x = self.image.width if end_x > self.image.width else max(0, end_x)
         end_y = self.image.height if end_y > self.image.height else max(0, end_y)
         if self.rect_id:
-            _start_x = self.start_x if self.start_x < end_x else end_x
-            _end_x = self.start_x if self.start_x > end_x else end_x
-            _start_y = self.start_y if self.start_y < end_y else end_y
-            _end_y = self.start_y if self.start_y > end_y else end_y
+            _start_x = (self.start_x if self.start_x < end_x else end_x) / self.image_scale
+            _end_x = (self.start_x if self.start_x > end_x else end_x) / self.image_scale
+            _start_y = (self.start_y if self.start_y < end_y else end_y) / self.image_scale
+            _end_y = (self.start_y if self.start_y > end_y else end_y) / self.image_scale
             self.rectangles.append((_start_x, _start_y, _end_x, _end_y))
             print(f"Rectangle coordinates: ({_start_x}, {_start_y}, {_end_x}, {_end_y})")
             self.rect_id = None
