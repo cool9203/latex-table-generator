@@ -18,7 +18,7 @@ _show_size = (1280, 1280)
 
 
 class RectangleDrawer:
-    def __init__(self, root):
+    def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Rectangle Drawer")
 
@@ -125,6 +125,7 @@ class RectangleDrawer:
 
             self.reset_image()
             self.rectangles = []
+            self.root.title(Path(image_path).name)
         except Exception as e:
             print(f"Failed to load image: {e}")
 
