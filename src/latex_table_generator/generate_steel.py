@@ -197,7 +197,7 @@ class Steel(ImageBase):
         font_color: Union[str, Tuple[int, int, int]] = (0, 0, 0),
         size: Tuple[int, int] = None,
         rng: random.Random = None,
-        iterations: int = 10,
+        iterations: int = 100,
         steel_rotate: Tuple[float, float] = None,
         steel_size_scale: Tuple[float, float] = None,
     ) -> Tuple[PILImage.Image, List[Dict[str, Union[Position, str]]]]:
