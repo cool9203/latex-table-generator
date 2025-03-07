@@ -30,7 +30,7 @@ def convert_steel_role_to_label(
         labels = [
             {
                 "label": "steel",
-                "position": [position for _, position in roles["position"].items()],
+                "position": [roles["position"]["x1"], roles["position"]["y1"], roles["position"]["x2"], roles["position"]["y2"]],
             }
         ]
 
