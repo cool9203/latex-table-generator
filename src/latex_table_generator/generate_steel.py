@@ -173,7 +173,7 @@ class Steel(ImageBase):
             if role.before_choices:
                 text += role.before_choices[rng.randint(0, len(role.before_choices) - 1)]
 
-            ranges = [n for n in range(*role.range)]
+            ranges = [n for n in np.arange(*role.range)]
             text += str(ranges[rng.randint(0, len(ranges) - 1)])
             if role.angle:
                 text += "°"
@@ -201,7 +201,7 @@ class Steel(ImageBase):
         rng: random.Random = None,
         iterations: int = 100,
         steel_rotate: Sequence[int] = None,
-        steel_flip: Optional[Literal["random", "horizontal", "vertical", "all"]] = None,
+        steel_flip: Optional[Literal["none", "random", "horizontal", "vertical", "all"]] = None,
         steel_size_scale: Sequence[int] = None,
         texts: List[str] = None,
     ) -> Tuple[PILImage.Image, List[Dict[str, Union[Position, str]]]]:
@@ -231,7 +231,7 @@ class Steel(ImageBase):
             steel_image = cv2.flip(src=steel_image, flipCode=-1)
 
         if steel_rotate:
-            angles = [n for n in range(*list(steel_rotate))]
+            angles = [n for n in np.arange(*list(steel_rotate))]
             angle = rng.choice(angles)
             steel_image = rotate_img_with_border(img=steel_image, angle=angle)
         if steel_size_scale:
