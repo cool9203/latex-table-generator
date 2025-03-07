@@ -8,14 +8,15 @@ import random
 from dataclasses import dataclass, field
 from os import PathLike
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple, Union
+from typing import Dict, List, Literal, Optional, Sequence, Tuple, Union
 
+import cv2
 import numpy as np
 from PIL import Image as PILImage
 from PIL import ImageDraw, ImageFont
 
 from latex_table_generator import utils
-from latex_table_generator.base import get_image, image_resize, paste_image_with_table_bbox, rotate_img_with_border
+from latex_table_generator.base import get_image, image_resize, paste_image, rotate_img_with_border
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
@@ -193,40 +194,75 @@ class Steel(ImageBase):
     def random_generate(
         self,
         count: int,
+        roles: List[SteelRole] = None,
         font: str = "mingliu.ttc",
         font_color: Union[str, Tuple[int, int, int]] = (0, 0, 0),
         size: Tuple[int, int] = None,
         rng: random.Random = None,
         iterations: int = 100,
-        steel_rotate: Tuple[float, float] = None,
-        steel_size_scale: Tuple[float, float] = None,
+        steel_rotate: Sequence[int] = None,
+        steel_flip: Optional[Literal["random", "horizontal", "vertical", "all"]] = None,
+        steel_size_scale: Sequence[int] = None,
+        texts: List[str] = None,
     ) -> Tuple[PILImage.Image, List[Dict[str, Union[Position, str]]]]:
+        steel_flip = steel_flip.lower() if steel_flip else steel_flip
+        if steel_flip and steel_flip not in ["none", "random", "horizontal", "vertical", "all"]:
+            raise ValueError(f"'steel_flip' not allow, should choice from {['none', 'random', 'horizontal', 'vertical', 'all']}")
+
         rng = rng if rng else self.rng
-        size = size if size else (self.size if self.size else self.image.size)
+        roles = roles if roles else self.roles
+        size = size if size else (self.size if self.size else self.image.size)  # (x, y)
 
-        image = PILImage.new(mode="RGB", size=size, color=(255, 255, 255))
+        image = get_image(PILImage.new(mode="RGB", size=size, color=(255, 255, 255)))
 
-        # Paste steel image
+        # Generate steel image
         steel_image = get_image(self.image.convert("RGB"))[
             self.position.y1 : self.position.y2, self.position.x1 : self.position.x2
         ]
-        if steel_rotate:
-            steel_image = rotate_img_with_border(img=steel_image, angle=rng.uniform(steel_rotate[0], steel_rotate[1]))
-        if steel_size_scale:
-            scale = rng.uniform(steel_size_scale[0], steel_size_scale[1])
-            steel_image = get_image(
-                image_resize(
-                    src=steel_image,
-                    size=(min(steel_image.shape[0] * scale, image.size[1]), min(steel_image.shape[1] * scale, image.size[0])),
-                )
-            )
 
-        (image, steel_position) = paste_image_with_table_bbox(
+        if steel_flip and steel_flip == "random":
+            steel_flip = rng.choice(["horizontal", "vertical", "all"])
+
+        if steel_flip and steel_flip == "vertical":
+            steel_image = cv2.flip(src=steel_image, flipCode=0)
+        elif steel_flip and steel_flip == "horizontal":
+            steel_image = cv2.flip(src=steel_image, flipCode=1)
+        elif steel_flip and steel_flip == "all":
+            steel_image = cv2.flip(src=steel_image, flipCode=-1)
+
+        if steel_rotate:
+            angles = [n for n in range(*list(steel_rotate))]
+            angle = rng.choice(angles)
+            steel_image = rotate_img_with_border(img=steel_image, angle=angle)
+        if steel_size_scale:
+            if rng.uniform(0, 4) >= 3:
+                steel_image = cv2.resize(
+                    src=steel_image,
+                    dsize=(
+                        min(int(steel_image.shape[1] * rng.uniform(steel_size_scale[0], steel_size_scale[1])), image.shape[1]),
+                        min(int(steel_image.shape[0] * rng.uniform(steel_size_scale[0], steel_size_scale[1])), image.shape[0]),
+                    ),  # (y, x)
+                    interpolation=cv2.INTER_LANCZOS4,
+                )
+            else:
+                scale = rng.uniform(steel_size_scale[0], steel_size_scale[1])
+                steel_image = get_image(
+                    image_resize(
+                        src=steel_image,
+                        size=(
+                            int(min(steel_image.shape[0] * scale, image.shape[0])),
+                            int(min(steel_image.shape[1] * scale, image.shape[1])),
+                        ),  # (y, x)
+                    )
+                )
+
+        # Paste steel image
+        (image, steel_position) = paste_image(
             src=image,
             dst=steel_image,
             position=(
-                rng.randint(0, image.size[0] - steel_image.shape[1]) if image.size[0] - steel_image.shape[1] > 0 else 0,
-                rng.randint(0, image.size[1] - steel_image.shape[0]) if image.size[1] - steel_image.shape[0] > 0 else 0,
+                rng.randint(0, image.shape[1] - steel_image.shape[1]) if image.shape[1] - steel_image.shape[1] > 0 else 0,
+                rng.randint(0, image.shape[0] - steel_image.shape[0]) if image.shape[0] - steel_image.shape[0] > 0 else 0,
             ),
         )
         image = PILImage.fromarray(image)
@@ -242,14 +278,21 @@ class Steel(ImageBase):
             text = format(ctx.create_decimal(repr(rng.uniform(1, 10000))), "f")
             precision = rng.randint(0, 3)
             angle = rng.uniform(0, 5)
-            text = text.split(".")[0] + ("." + text.split(".")[1][:precision] if precision else "")
-            text = text if angle < 4 and precision else f"{text}°"
+            if angle >= 4:
+                text = f"{text.split('.')[0]}°"
+            else:
+                text = text.split(".")[0] + ("." + text.split(".")[1][:precision] if precision else "")
+
+            if texts and rng.uniform(0, 4) >= 3:
+                if rng.randint(0, 1) == 1:
+                    text += rng.choice(texts)
+                else:
+                    text = f"{rng.choice(texts)}{text}"
 
             for iteration in range(iterations):
                 font_size = rng.randint(8, 72)
                 x1 = rng.randint(0, image.width)
                 y1 = rng.randint(0, image.height)
-                logger.debug(f"x1: {x1}, y1: {y1}, font_size: {font_size}")
                 _font = ImageFont.truetype(font, font_size)
                 text_bbox = _font.getbbox(text)
                 text_position = Position(
@@ -280,7 +323,7 @@ class Steel(ImageBase):
                     break
 
         return (
-            image_resize(src=image, size=size),
+            image_resize(src=image, size=(size[1], size[0])),
             labels,
         )
 
@@ -355,8 +398,9 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--input_paths", type=str, nargs="+", default=[], help="Input path(folder)")
     parser.add_argument("-c", "--count", type=int, default=None, help="Generate count")
     parser.add_argument("--image_augment", action="store_true", help="Use image augment")
-    parser.add_argument("--rotate", type=float, nargs="+", default=None, help="Rotate range")
-    parser.add_argument("--size_scale", type=float, nargs="+", default=None, help="Size scale range")
+    parser.add_argument("--steel_flip", type=str, choices=["random", "horizontal", "vertical", "all"], help="Steel flip")
+    parser.add_argument("--steel_rotate", type=float, nargs="+", default=None, help="Rotate range")
+    parser.add_argument("--steel_size_scale", type=float, nargs="+", default=None, help="Size scale range")
     parser.add_argument("--fonts_dir", type=str, default="./fonts", help="Fonts folder")
 
     args = parser.parse_args()
@@ -371,6 +415,21 @@ if __name__ == "__main__":
             iaa.AverageBlur(k=(1, 5)),
         ],
     )
+    texts = [
+        "準",
+        "寬",
+        "直料",
+        "公分",
+        "角度",
+        "T頭",
+        "公頭",
+        "母頭",
+        "cm",
+        "\\",
+        "/",
+        "x",
+        "X",
+    ]
 
     rng = random.Random(os.getenv("SEED", None))
     fonts: list[str] = ["mingliu.ttc"]
@@ -396,9 +455,11 @@ if __name__ == "__main__":
                 "count": number_count,
                 "iterations": 100,
                 "font": fonts[rng.randint(0, len(fonts) - 1)],
+                "texts": texts,
             }
-            params.update(steel_rotate=args.rotate) if args.rotate is not None else None
-            params.update(steel_size_scale=args.size_scale) if args.size_scale is not None else None
+            params.update(steel_flip=args.steel_flip) if args.steel_flip is not None else None
+            params.update(steel_rotate=args.steel_rotate) if args.steel_rotate is not None else None
+            params.update(steel_size_scale=args.steel_size_scale) if args.steel_size_scale is not None else None
             (generate_image, generate_image_label) = steel.random_generate(**params)
 
             name = str(uuid4())
