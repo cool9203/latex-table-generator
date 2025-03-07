@@ -104,13 +104,24 @@ def fix_rotation_image(
     return img, False
 
 
-def paste_image_with_table_bbox(
+def paste_image(
     src: InputType,
     dst: InputType,
     position: Tuple[int, int],
     **kwds,
 ) -> Tuple[MatLike, Tuple[int, int, int, int]]:
+    """Paste dst image to src image
+
+    Args:
+        src (InputType): base image
+        dst (InputType): paste image
+        position (Tuple[int, int]): (x, y)
+
+    Returns:
+        Tuple[MatLike, Tuple[int, int, int, int]]: (MatLike, paste position(x1, y1, x2, y2))
+    """
     img = get_image(src=src)
+    dst = get_image(src=dst)
 
     x1 = position[0]
     x2 = x1 + dst.shape[1]
