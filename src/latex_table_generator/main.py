@@ -32,7 +32,7 @@ from latex_table_generator.base import (
     fix_rotation_image,
     get_image,
     image_resize,
-    paste_image_with_table_bbox,
+    paste_image,
     rotate_img_with_border,
     run_random_crop_rectangle,
 )
@@ -745,7 +745,7 @@ def paste_fit_size_latex_table_to_image(
                 logger.debug(f"position: {(int(position[0] + area_offset_x), int(position[1] + area_offset_y))}")
                 logger.debug(f"image.shape: {image.shape}")
                 logger.debug(f"area.shape: ({area_height}, {area_width})")
-                (final_image, table_position) = paste_image_with_table_bbox(
+                (final_image, table_position) = paste_image(
                     src=final_image if final_image is not None else file_image,
                     dst=image,
                     position=(int(position[0] + area_offset_x), int(position[1] + area_offset_y)),
