@@ -199,9 +199,19 @@ def image_resize(
     size: Tuple[int, int] = None,
     scale: float = None,
 ) -> PILImage.Image:
+    """Resize image
+
+    Args:
+        src (InputType): source image
+        size (Tuple[int, int], optional): (y, x). Defaults to None.
+        scale (float, optional): scale. Defaults to None.
+
+    Returns:
+        PILImage.Image: PIL image
+    """
     # interpolation reference: https://stackoverflow.com/questions/23853632/which-kind-of-interpolation-best-for-resizing-image
-    if size and size != src.size:
-        image = get_image(src=src)
+    image = get_image(src=src)
+    if size and size != image.shape[:2]:
         scale = scale if scale else min(size[0] / image.shape[0], size[1] / image.shape[1])
         interpolation = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
         image = cv2.resize(
@@ -213,4 +223,6 @@ def image_resize(
             interpolation=interpolation,
         )
         src = PILImage.fromarray(image)
+    if isinstance(src, (MatLike, np.ndarray)):
+        return PILImage.fromarray(image)
     return src
