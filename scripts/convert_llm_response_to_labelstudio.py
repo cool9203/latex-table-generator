@@ -48,6 +48,18 @@ _key2name = {
     "TotalAmountCH": "手寫金額",
 }
 _name2key = {v: k for k, v in _key2name.items()}
+_default_predict = {
+    "發票號碼": "",
+    "買受人名稱": "",
+    "賣方公司統編": "",
+    "買方公司統編": "",
+    "發票日期": "",
+    "品項": [""],
+    "未稅金額": "",
+    "稅額": "",
+    "總金額": "",
+    "手寫金額": "",
+}
 
 
 def arg_parse() -> argparse.Namespace:
@@ -86,6 +98,9 @@ def convert_llm_response_to_labelstudio(
             print(e)
             print("-" * 25)
 
+        if not llm_response:
+            llm_response = _default_predict
+
         label_studio_predictions.append(
             {
                 "data": {
@@ -108,8 +123,6 @@ def convert_llm_response_to_labelstudio(
                             ],
                         }
                     ]
-                    if llm_response
-                    else []
                 ),
             }
         )
