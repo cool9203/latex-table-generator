@@ -425,11 +425,6 @@ if __name__ == "__main__":
         "公頭",
         "母頭",
         "cm",
-        "\\",
-        "/",
-        "|",
-        "x",
-        "X",
     ]
 
     rng = random.Random(os.getenv("SEED", None))
